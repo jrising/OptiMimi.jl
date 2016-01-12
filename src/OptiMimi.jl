@@ -6,9 +6,10 @@ using Compat
 
 import Mimi: Model, CertainScalarParameter, CertainArrayParameter, addparameter
 
-export problem, solution, unaryobjective
+export problem, solution, unaryobjective, objevals
 
 allverbose = false
+objevals = 0
 
 type OptimizationProblem
     model::Model
@@ -40,7 +41,8 @@ function setparameters(model::Model, components::Vector{Symbol}, names::Vector{S
         if isscalar
             model.components[components[ii]].Parameters.(names[ii]) = xx[startindex]
         else
-            model.components[components[ii]].Parameters.(names[ii]) = collect(Number, xx[startindex:(startindex+len - 1)])
+            shape = size(model.components[components[ii]].Parameters.(names[ii]))
+            model.components[components[ii]].Parameters.(names[ii]) = reshape(collect(Number, xx[startindex:(startindex+len - 1)]), shape)
         end
         startindex += len
     end
@@ -52,6 +54,9 @@ function unaryobjective(model::Model, components::Vector{Symbol}, names::Vector{
         if allverbose
             println(xx)
         end
+
+        global objevals
+        objevals += 1
 
         setparameters(model, components, names, xx)
         run(model)
@@ -85,6 +90,9 @@ function autodiffobjective(model::Model, components::Vector{Symbol}, names::Vect
         fdcache = ForwardDiffCache()
         function myobjective(xx::Vector, grad::Vector)
             calcgrad, allresults = ForwardDiff.gradient(myunaryobjective, xx, AllResults, cache=fdcache)
+            if any(isnan(calcgrad))
+                error("objective gradient is NaN")
+            end
             copy!(grad, calcgrad)
             value(allresults)
         end
@@ -114,6 +122,7 @@ function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vecto
             warn("Model is autodifferentiable, but optimizing using a derivative-free algorithm.")
             myobjective = gradfreeobjective(model, components, names, objective)
         else
+            println("Using AutoDiff objective.")
             myobjective = autodiffobjective(model, components, names, objective)
         end
     else
@@ -178,6 +187,9 @@ function solution(optprob::OptimizationProblem, generator::Function; maxiter=Inf
         end
 
         attempts += 1
+        if attempts % 1000 == 0
+            println("Could not find initial point after $attempts attempts.")
+        end
     end
 
     if !valid
