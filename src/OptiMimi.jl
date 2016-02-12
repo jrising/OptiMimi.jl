@@ -2,6 +2,7 @@ module OptiMimi
 
 using NLopt
 using ForwardDiff
+using MathProgBase
 using Compat
 
 import Mimi: Model, CertainScalarParameter, CertainArrayParameter, addparameter
@@ -17,6 +18,16 @@ type OptimizationProblem
     names::Vector{Symbol}
     opt::Opt
     constraints::Vector{Function}
+end
+
+type LinprogOptimizationProblem{T}
+    model::Model
+    components::Vector{Symbol}
+    names::Vector{Symbol}
+    objective::Function
+    constraints::Vector{Function}
+    exlowers::Vector{T}
+    exuppers::Vector{T}
 end
 
 """Returns (ii, len, isscalar) with the index of each symbol and its length."""
@@ -114,7 +125,9 @@ function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vecto
         totalvars += len
     end
 
-    if model.numberType==Number
+    if algorithm == :GUROBI_LINPROG
+        # Make not changes to objective!
+    elseif model.numberType == Number
         if algorithm == :LN_COBYLA_OR_LD_MMA
             algorithm = :LD_MMA
         end
@@ -136,25 +149,29 @@ function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vecto
         myobjective = gradfreeobjective(model, components, names, objective)
     end
 
-    opt = Opt(algorithm, totalvars)
-    lower_bounds!(opt, my_lowers)
-    upper_bounds!(opt, my_uppers)
-    xtol_rel!(opt, minimum(1e-6 * (uppers - lowers)))
+    if algorithm == :GUROBI_LINPROG
+        LinprogOptimizationProblem(model, components, names, objective, constraints, my_lowers, my_uppers)
+    else
+        opt = Opt(algorithm, totalvars)
+        lower_bounds!(opt, my_lowers)
+        upper_bounds!(opt, my_uppers)
+        xtol_rel!(opt, minimum(1e-6 * (uppers - lowers)))
 
-    max_objective!(opt, myobjective)
+        max_objective!(opt, myobjective)
 
-    for constraint in constraints
-        let this_constraint = constraint
-            function my_constraint(xx::Vector, grad::Vector)
-                setparameters(model, components, names, xx)
-                this_constraint(model)
+        for constraint in constraints
+            let this_constraint = constraint
+                function my_constraint(xx::Vector, grad::Vector)
+                    setparameters(model, components, names, xx)
+                    this_constraint(model)
+                end
+
+                inequality_constraint!(opt, my_constraint)
             end
-
-            inequality_constraint!(opt, my_constraint)
         end
-    end
 
-    OptimizationProblem(model, components, names, opt, constraints)
+        OptimizationProblem(model, components, names, opt, constraints)
+    end
 end
 
 """Solve an optimization problem."""
@@ -203,5 +220,60 @@ function solution(optprob::OptimizationProblem, generator::Function; maxiter=Inf
 
     (minf, minx)
 end
+
+"""Solve an optimization problem."""
+function solution(optprob::LinprogOptimizationProblem, generator::Function; maxiter=Inf, verbose=false)
+    global allverbose
+    allverbose = verbose
+
+    initial = generator()
+
+    if verbose
+        println("Optimizing...")
+    end
+
+    if optprob.model.numberType == Number
+        myobjective = unaryobjective(optprob.model, optprob.components, optprob.names, optprob.objective)
+        myconstraints = Function[]
+        for constraint in optprob.constraints
+            myconstraints = [myconstraints; unaryobjective(optprob.model, optprob.components, optprob.names, constraint)]
+        end
+
+        # Copied from makematrix.jl
+        # Could be made more efficient to get b values from gradient
+        f = ForwardDiff.gradient(myobjective, initial)
+
+        A = Float64[]
+        b = Float64[]
+        for myconstraint in myconstraints
+            A = [A; ForwardDiff.gradient(myconstraint, initial)]
+            b = [b; myconstraint(initial)] # Not the final values for 'b' yet!
+        end
+
+        A = reshape(A, (length(initial), div(length(A), length(initial))))'
+    else
+        rg = RegisterGradient(optprob.model, optprob.components, optprob.names, 1.0)
+        addfunction!(rg, optprob.objective)
+        for constraint in optprob.constraints
+            addfunction!(rg, constraint)
+        end
+
+        vb, fA = getgradients(rg, initial)
+
+        f = vec(fA[1, :])
+        A = fA[2:end, :]
+        b = vb[2:end]
+    end
+
+    b = A * initial - b
+
+    println(size(A))
+
+    sol = linprog(f, A, '<', b, optprob.exlowers, optprob.exuppers)
+
+    sol.sol
+end
+
+include("registerdiff.jl")
 
 end # module
