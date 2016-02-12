@@ -226,7 +226,7 @@ function solution(optprob::LinprogOptimizationProblem, generator::Function; maxi
     global allverbose
     allverbose = verbose
 
-    initial = generator()
+    initial = generator(optprob.model)
 
     if verbose
         println("Optimizing...")
