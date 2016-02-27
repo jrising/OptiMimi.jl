@@ -4,6 +4,8 @@ using Base.Test
 
 using ForwardDiff
 
+include("testlp.jl")
+
 # Differentiation-free optimization
 # Create quadratic component
 @defcomp quad1 begin

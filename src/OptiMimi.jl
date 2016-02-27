@@ -9,6 +9,9 @@ import Mimi: Model, CertainScalarParameter, CertainArrayParameter, addparameter
 
 export problem, solution, unaryobjective, objevals
 
+include("registerdiff.jl")
+include("matrixconstraints.jl")
+
 allverbose = false
 objevals = 0
 
@@ -25,7 +28,8 @@ type LinprogOptimizationProblem{T}
     components::Vector{Symbol}
     names::Vector{Symbol}
     objective::Function
-    constraints::Vector{Function}
+    objectiveconstraints::Vector{Function}
+    matrixconstraints::Vector{MatrixConstraintSet}
     exlowers::Vector{T}
     exuppers::Vector{T}
 end
@@ -112,6 +116,17 @@ function autodiffobjective(model::Model, components::Vector{Symbol}, names::Vect
     myobjective
 end
 
+"""Create a 0 point."""
+function make0(model::Model, names::Vector{Symbol})
+    initial = Float64[]
+    for (ii, len, isscalar) in @task nameindexes(model, names)
+        append!(initial, [0. for jj in 1:len])
+    end
+
+    initial
+end
+
+
 """Setup an optimization problem."""
 function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}, objective::Function; constraints::Vector{Function}=Function[], algorithm::Symbol=:LN_COBYLA_OR_LD_MMA)
     my_lowers = T[]
@@ -126,7 +141,7 @@ function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vecto
     end
 
     if algorithm == :GUROBI_LINPROG
-        # Make not changes to objective!
+        # Make no changes to objective!
     elseif model.numberType == Number
         if algorithm == :LN_COBYLA_OR_LD_MMA
             algorithm = :LD_MMA
@@ -150,7 +165,7 @@ function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vecto
     end
 
     if algorithm == :GUROBI_LINPROG
-        LinprogOptimizationProblem(model, components, names, objective, constraints, my_lowers, my_uppers)
+        LinprogOptimizationProblem(model, components, names, objective, constraints, MatrixConstraintSet[], my_lowers, my_uppers)
     else
         opt = Opt(algorithm, totalvars)
         lower_bounds!(opt, my_lowers)
@@ -221,12 +236,28 @@ function solution(optprob::OptimizationProblem, generator::Function; maxiter=Inf
     (minf, minx)
 end
 
+"""Setup an optimization problem."""
+function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}, objective::Function, objectiveconstraints::Vector{Function}, matrixconstraints::Vector{MatrixConstraintSet})
+    my_lowers = T[]
+    my_uppers = T[]
+
+    ## Replace with eachname
+    totalvars = 0
+    for (ii, len, isscalar) in @task nameindexes(model, names)
+        append!(my_lowers, [lowers[ii] for jj in 1:len])
+        append!(my_uppers, [uppers[ii] for jj in 1:len])
+        totalvars += len
+    end
+
+    LinprogOptimizationProblem(model, components, names, objective, objectiveconstraints, matrixconstraints, my_lowers, my_uppers)
+end
+
 """Solve an optimization problem."""
-function solution(optprob::LinprogOptimizationProblem, generator::Function; maxiter=Inf, verbose=false)
+function solution(optprob::LinprogOptimizationProblem, verbose=false)
     global allverbose
     allverbose = verbose
 
-    initial = generator(optprob.model)
+    initial = make0(optprob.model, optprob.names)
 
     if verbose
         println("Optimizing...")
@@ -234,27 +265,13 @@ function solution(optprob::LinprogOptimizationProblem, generator::Function; maxi
 
     if optprob.model.numberType == Number
         myobjective = unaryobjective(optprob.model, optprob.components, optprob.names, optprob.objective)
-        myconstraints = Function[]
-        for constraint in optprob.constraints
-            myconstraints = [myconstraints; unaryobjective(optprob.model, optprob.components, optprob.names, constraint)]
-        end
-
-        # Copied from makematrix.jl
-        # Could be made more efficient to get b values from gradient
         f = ForwardDiff.gradient(myobjective, initial)
 
-        A = Float64[]
-        b = Float64[]
-        for myconstraint in myconstraints
-            A = [A; ForwardDiff.gradient(myconstraint, initial)]
-            b = [b; myconstraint(initial)] # Not the final values for 'b' yet!
-        end
-
-        A = reshape(A, (length(initial), div(length(A), length(initial))))'
+        b, A = lpconstraints(optprob.model, optprob.components, optprob.names, objectiveconstraints)
     else
         rg = RegisterGradient(optprob.model, optprob.components, optprob.names, 1.0)
         addfunction!(rg, optprob.objective)
-        for constraint in optprob.constraints
+        for constraint in optprob.objectiveconstraints
             addfunction!(rg, constraint)
         end
 
@@ -265,15 +282,17 @@ function solution(optprob::LinprogOptimizationProblem, generator::Function; maxi
         b = vb[2:end]
     end
 
-    b = A * initial - b
+    f, b, A = combineconstraints(f, b, A, optprob.model, optprob.components, optprob.names, optprob.matrixconstraints)
+    exlowers, exuppers = combinelimits(optprob.exlowers, optprob.exuppers, optprob.model, optprob.components, optprob.names, optprob.matrixconstraints)
 
     println(size(A))
+    println(size(b))
+    println(size(optprob.exlowers))
+    println(size(f))
 
-    sol = linprog(f, A, '<', b, optprob.exlowers, optprob.exuppers)
+    @time sol = linprog(f, A, '<', b, optprob.exlowers, optprob.exuppers)
 
     sol.sol
 end
-
-include("registerdiff.jl")
 
 end # module
