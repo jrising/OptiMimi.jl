@@ -26,16 +26,24 @@ end
 
 function getgradients(rg::RegisterGradient, xx::Vector{Float64})
     baseline = rg.libeval(xx, rg.funcs)
+    if any(isnan(baseline))
+        error("Cannot compute the baseline for gradients.")
+    end
 
-    gradient = Array{Float64}(length(rg.funcs), length(xx))
+    gradients = Array{Float64}(length(rg.funcs), length(xx))
 
     for ii in 1:length(xx)
         println(ii / length(xx))
         # Adjust a single value
         xx[ii] = xx[ii] + rg.dx
-        gradient[:, ii] = (rg.libeval(xx, rg.funcs) - baseline) / rg.dx
+        gradient = (rg.libeval(xx, rg.funcs) - baseline) / rg.dx
         xx[ii] = xx[ii] - rg.dx
+
+        if any(isnan(gradient))
+            error("Cannot calculate the gradient for constraint $ii")
+        end
+        gradients[:, ii] = gradient
     end
 
-    baseline, gradient
+    baseline, gradients
 end

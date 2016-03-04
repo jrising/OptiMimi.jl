@@ -7,7 +7,7 @@ using Compat
 
 import Mimi: Model, CertainScalarParameter, CertainArrayParameter, addparameter
 
-export problem, solution, unaryobjective, objevals
+export problem, solution, unaryobjective, objevals, setparameters, nameindexes
 
 include("registerdiff.jl")
 include("matrixconstraints.jl")
@@ -265,30 +265,13 @@ function solution(optprob::LinprogOptimizationProblem, verbose=false)
 
     if optprob.model.numberType == Number
         myobjective = unaryobjective(optprob.model, optprob.components, optprob.names, optprob.objective)
-        f = ForwardDiff.gradient(myobjective, initial)
-
-        b, A = lpconstraints(optprob.model, optprob.components, optprob.names, objectiveconstraints)
+        f, b, A = lpconstraints(optprob.model, optprob.components, optprob.names, myobjective, objectiveconstraints)
     else
-        rg = RegisterGradient(optprob.model, optprob.components, optprob.names, 1.0)
-        addfunction!(rg, optprob.objective)
-        for constraint in optprob.objectiveconstraints
-            addfunction!(rg, constraint)
-        end
-
-        vb, fA = getgradients(rg, initial)
-
-        f = vec(fA[1, :])
-        A = fA[2:end, :]
-        b = vb[2:end]
+        f, b, A = lpconstraints(optprob.model, optprob.components, optprob.names, optprob.objective, optprob.objectiveconstraints)
     end
 
     f, b, A = combineconstraints(f, b, A, optprob.model, optprob.components, optprob.names, optprob.matrixconstraints)
     exlowers, exuppers = combinelimits(optprob.exlowers, optprob.exuppers, optprob.model, optprob.components, optprob.names, optprob.matrixconstraints)
-
-    println(size(A))
-    println(size(b))
-    println(size(optprob.exlowers))
-    println(size(f))
 
     @time sol = linprog(f, A, '<', b, optprob.exlowers, optprob.exuppers)
 
