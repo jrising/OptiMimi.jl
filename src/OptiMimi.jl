@@ -273,7 +273,8 @@ function solution(optprob::LinprogOptimizationProblem, verbose=false)
     f, b, A = combineconstraints(f, b, A, optprob.model, optprob.components, optprob.names, optprob.matrixconstraints)
     exlowers, exuppers = combinelimits(optprob.exlowers, optprob.exuppers, optprob.model, optprob.components, optprob.names, optprob.matrixconstraints)
 
-    @time sol = linprog(f, A, '<', b, optprob.exlowers, optprob.exuppers)
+    # Use -f, because linprog *minimizes* objective
+    @time sol = linprog(-f, A, '<', b, optprob.exlowers, optprob.exuppers)
 
     sol.sol
 end
