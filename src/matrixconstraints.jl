@@ -11,7 +11,10 @@ type MatrixConstraintSet
     b::Vector{Float64}
 end
 
-function lpconstraints(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, objective::Function, constraints::Vector{Function})
+function lpconstraints(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, objective::Function, constraints::Vector{Function}; verbose=false)
+    if verbose
+        println("Making zero point.")
+    end
     initial = make0(model, names)
 
     if model.numberType == Number
@@ -34,13 +37,16 @@ function lpconstraints(model::Model, components::Vector{Symbol}, names::Vector{S
 
         A = reshape(A, (length(initial), div(length(A), length(initial))))'
     else
+        if verbose
+            println("Adding to gradient collection.")
+        end
         rg = RegisterGradient(model, components, names, 1.0)
         addfunction!(rg, objective)
         for constraint in constraints
             addfunction!(rg, constraint)
         end
 
-        vb, fA = getgradients(rg, initial)
+        vb, fA = getgradients(rg, initial, verbose=verbose)
         f = vec(fA[1, :])
         A = fA[2:end, :]
         b = vb[2:end]
@@ -51,8 +57,8 @@ function lpconstraints(model::Model, components::Vector{Symbol}, names::Vector{S
     f, b, A
 end
 
-function savelpconstraints(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{Float64}, uppers::Vector{Float64}, objective::Function, constraints::Vector{Function}=Function[])
-    f, b, A = lpconstraints(model, components, names, objective, constraints)
+function savelpconstraints(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{Float64}, uppers::Vector{Float64}, objective::Function, constraints::Vector{Function}=Function[]; verbose=false)
+    f, b, A = lpconstraints(model, components, names, objective, constraints, verbose=verbose)
 
     sA = sparse(A)
     MatrixConstraintSet(model, components, names, lowers, uppers, f, sA, b)
