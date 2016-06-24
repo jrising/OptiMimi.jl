@@ -3,3 +3,5 @@ Mimi
 NLopt
 ForwardDiff
 MathProgBase
+DataFrames
+GLPKMathProgInterface
