@@ -4,4 +4,4 @@ NLopt
 ForwardDiff
 MathProgBase
 DataFrames
-GLPKMathProgInterface
+Clp
