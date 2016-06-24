@@ -1,7 +1,6 @@
-export savelpconstraints
+export savelpconstraints, MatrixConstraintSet
 
 type MatrixConstraintSet
-    model::Model
     components::Vector{Symbol}
     names::Vector{Symbol}
     lowers::Vector{Float64}
@@ -46,7 +45,7 @@ function lpconstraints(model::Model, components::Vector{Symbol}, names::Vector{S
             addfunction!(rg, constraint)
         end
 
-        vb, fA = getgradients(rg, initial, verbose=verbose)
+        vb, fA = getgradients(rg, initial, verbose=verbose, usesparse=false)
         f = vec(fA[1, :])
         A = fA[2:end, :]
         b = vb[2:end]
@@ -61,7 +60,7 @@ function savelpconstraints(model::Model, components::Vector{Symbol}, names::Vect
     f, b, A = lpconstraints(model, components, names, objective, constraints, verbose=verbose)
 
     sA = sparse(A)
-    MatrixConstraintSet(model, components, names, lowers, uppers, f, sA, b)
+    MatrixConstraintSet(components, names, lowers, uppers, f, sA, b)
 end
 
 function combineconstraints(f::Vector{Float64}, b::Vector{Float64}, A::Matrix{Float64}, model::Model, components::Vector{Symbol}, names::Vector{Symbol}, constraints::Vector{MatrixConstraintSet})
@@ -118,7 +117,7 @@ end
 
 function combinelimits(exlowers::Vector{Float64}, exuppers::Vector{Float64}, model::Model, components::Vector{Symbol}, names::Vector{Symbol}, constraints::Vector{MatrixConstraintSet})
     for constraint in constraints
-        for (ii, len, isscalar) in @task nameindexes(constraint.model, constraint.names)
+        for (ii, len, isscalar) in @task nameindexes(model, constraint.names)
             append!(exlowers, [constraint.lowers[ii] for jj in 1:len])
             append!(exuppers, [constraint.uppers[ii] for jj in 1:len])
         end

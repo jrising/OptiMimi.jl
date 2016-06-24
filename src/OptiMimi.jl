@@ -11,6 +11,7 @@ export problem, solution, unaryobjective, objevals, setparameters, nameindexes
 
 include("registerdiff.jl")
 include("matrixconstraints.jl")
+include("linproghouse.jl")
 
 allverbose = false
 objevals = 0
@@ -102,14 +103,14 @@ function autodiffobjective(model::Model, components::Vector{Symbol}, names::Vect
             value(gradual)
         end
     else
-        fdcache = ForwardDiffCache()
         function myobjective(xx::Vector, grad::Vector)
-            calcgrad, allresults = ForwardDiff.gradient(myunaryobjective, xx, AllResults, cache=fdcache)
-            if any(isnan(calcgrad))
+            out = GradientResult(xx)
+            ForwardDiff.gradient!(out, myunaryobjective, xx)
+            if any(isnan(ForwardDiff.gradient(out)))
                 error("objective gradient is NaN")
             end
-            copy!(grad, calcgrad)
-            value(allresults)
+            copy!(grad, ForwardDiff.gradient(out))
+            ForwardDiff.value(out)
         end
     end
 

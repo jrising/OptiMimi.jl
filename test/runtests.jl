@@ -21,7 +21,7 @@ include("testlp.jl")
     value = Variable(index=[regions])
 end
 
-function timestep(state::quad1, t)
+function run_timestep(state::quad1, t)
     v = state.Variables
     p = state.Parameters
 
@@ -61,7 +61,7 @@ optprob = problem(model1, [:quad1], [:input], [0.], [100.0], objective1)
     value = Variable(index=[regions])
 end
 
-function timestep(state::quad2, t)
+function run_timestep(state::quad2, t)
     v = state.Variables
     p = state.Parameters
 
@@ -80,7 +80,7 @@ objective2(model::Model) = sum(model[:quad2, :value])
 
 # Test the translation to a simple objective function
 uo = unaryobjective(model2, [:quad2], [:input], objective2)
-guo = ForwardDiff.gradient(uo)
+guo(xx) = ForwardDiff.gradient(uo, xx)
 guos = guo([0., 0.])
 @test_approx_eq_eps guos[1] 4 1e-2
 @test_approx_eq_eps guos[2] 20 1e-2

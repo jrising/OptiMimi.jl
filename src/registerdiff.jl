@@ -32,8 +32,6 @@ function getgradients(rg::RegisterGradient, xx::Vector{Float64}; verbose=false, 
 
     if usesparse
         gradients = spzeros(length(rg.funcs), length(xx))
-        println(issparse(gradients))
-        println(nnz(gradients))
     else
         gradients = Array{Float64}(length(rg.funcs), length(xx))
     end
