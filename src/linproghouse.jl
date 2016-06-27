@@ -8,7 +8,7 @@ import Base.*, Base.-, Base.+
 export LinearProgrammingHall, LinearProgrammingShaft, LinearProgrammingRoom, LinearProgrammingHouse
 export hallsingle, hall_relabel
 export shaftsingle
-export roomdiagonal, roomintersect, room_relabel, room_relabel_parameter
+export roomdiagonal, roomsingle, roomintersect, room_relabel, room_relabel_parameter
 export varsum
 export setobjective!, setconstraint!, setconstraintoffset!, clearconstraint!, setupper!
 export gethouse, constraining, houseoptimize
@@ -73,6 +73,9 @@ type LinearProgrammingRoom
     A::SparseMatrixCSC{Float64, Int64}
 end
 
+"""
+Fill in just the diagonal
+"""
 function roomdiagonal(model::Model, component::Symbol, variable::Symbol, parameter::Symbol, gen::Function)
     dimsvar = getdims(model, component, variable)
     dimspar = getdims(model, component, parameter)
@@ -80,10 +83,37 @@ function roomdiagonal(model::Model, component::Symbol, variable::Symbol, paramet
     LinearProgrammingRoom(component, variable, component, parameter, matrixdiagonal(dimsvar, gen))
 end
 
+"""
+Fill in every element
+"""
+function roomsingle(model::Model, component::Symbol, variable::Symbol, parameter::Symbol, gen::Function)
+    dimsvar = getdims(model, component, variable)
+    dimspar = getdims(model, component, parameter)
+    LinearProgrammingRoom(component, variable, component, parameter, matrixsingle(dimsvar, dimspar, gen))
+end
+
+"""
+Call gen for each shared index, passing an array to be filled for unshared indexes.
+This version assumes both variables come from the same component.
+"""
 function roomintersect(model::Model, component::Symbol, variable1::Symbol, variable2::Symbol, gen::Function)
     dims1 = getdims(model, component, variable1)
     dims2 = getdims(model, component, variable2)
-    LinearProgrammingRoom(component, variable1, component, variable2, matrixintersect(dims1, dims2, gen))
+    dimnames1 = getdimnames(model, component, variable1)
+    dimnames2 = getdimnames(model, component, variable2)
+    LinearProgrammingRoom(component, variable1, component, variable2, matrixintersect(dims1, dims2, dimnames1, dimnames2, gen))
+end
+
+"""
+Call gen for each shared index, passing an array to be filled for unshared indexes.
+This version allows the variables to come from different component.
+"""
+function roomintersect(model::Model, component1::Symbol, variable1::Symbol, component2::Symbol, variable2::Symbol, gen::Function)
+    dims1 = getdims(model, component1, variable1)
+    dims2 = getdims(model, component2, variable2)
+    dimnames1 = getdimnames(model, component1, variable1)
+    dimnames2 = getdimnames(model, component2, variable2)
+    LinearProgrammingRoom(component1, variable1, component2, variable2, matrixintersect(dims1, dims2, dimnames1, dimnames2, gen))
 end
 
 """Connect a gradient to another component: change the variable component and name to another component."""
@@ -145,6 +175,7 @@ type LinearProgrammingHouse
     parameters::Vector{Symbol}
     constcomps::Vector{Symbol}
     constraints::Vector{Symbol}
+    constdictionary::Dict{Symbol, Symbol}
     lowers::Vector{Float64}
     uppers::Vector{Float64}
     f::Vector{Float64}
@@ -152,13 +183,13 @@ type LinearProgrammingHouse
     b::Vector{Float64}
 end
 
-function LinearProgrammingHouse(model::Model, paramcomps::Vector{Symbol}, parameters::Vector{Symbol}, constcomps::Vector{Symbol}, constraints::Vector{Symbol})
+function LinearProgrammingHouse(model::Model, paramcomps::Vector{Symbol}, parameters::Vector{Symbol}, constcomps::Vector{Symbol}, constraints::Vector{Symbol}, constdictionary::Dict{Symbol, Symbol}=Dict{Symbol, Symbol}())
     paramlen = sum(varlengths(model, paramcomps, parameters))
-    variablelen = sum(varlengths(model, constcomps, constraints))
+    variablelen = sum(varlengths(model, constcomps, constraints, constdictionary))
     A = spzeros(variablelen, paramlen)
     f = zeros(paramlen)
     b = zeros(variablelen)
-    LinearProgrammingHouse(model, paramcomps, parameters, constcomps, constraints, zeros(length(f)), Inf * ones(length(f)), f, A, b)
+    LinearProgrammingHouse(model, paramcomps, parameters, constcomps, constraints, constdictionary, zeros(length(f)), Inf * ones(length(f)), f, A, b)
 end
 
 function setobjective!(house::LinearProgrammingHouse, hall::LinearProgrammingHall)
@@ -180,7 +211,7 @@ function setconstraint!(house::LinearProgrammingHouse, room::LinearProgrammingRo
     kk = findfirst((house.paramcomps .== room.paramcomponent) & (house.parameters .== room.parameter))
     ll = findfirst((house.constcomps .== room.varcomponent) & (house.constraints .== room.variable))
     paramspans = varlengths(house.model, house.paramcomps, house.parameters)
-    constspans = varlengths(house.model, house.constcomps, house.constraints)
+    constspans = varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)
     @assert size(room.A, 1) == constspans[ll] "Length of variable $(room.variable) unexpected: $(size(room.A, 1)) <> $(constspans[ll])"
     @assert size(room.A, 2) == paramspans[kk] "Length of parameter $(room.parameter) unexpected: $(size(room.A, 2)) <> $(paramspans[kk])"
 
@@ -193,7 +224,7 @@ end
 function setconstraintoffset!(house::LinearProgrammingHouse, hall::LinearProgrammingHall)
     @assert hall.name in house.constraints "$(hall.name) not a known variable"
     kk = findfirst((house.constcomps .== hall.component) & (house.constraints .== hall.name))
-    constspans = varlengths(house.model, house.constcomps, house.constraints)
+    constspans = varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)
     @assert length(hall.f) == constspans[kk] "Length of parameter $(hall.name) unexpected: $(length(hall.f)) <> $(constspans[kk])"
     before = sum(constspans[1:kk-1])
     for ii in 1:constspans[kk]
@@ -206,7 +237,7 @@ function clearconstraint!(house::LinearProgrammingHouse, component::Symbol, vari
     @assert variable in house.constraints "$(variable) not a known variable"
 
     ll = findfirst((house.constcomps .== component) & (house.constraints .== variable))
-    constspans = varlengths(house.model, house.constcomps, house.constraints)
+    constspans = varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)
 
     constbefore = sum(constspans[1:ll-1])
 
@@ -228,9 +259,9 @@ end
 
 function gethouse(house::LinearProgrammingHouse, rr::Int64, cc::Int64)
     # Determine the row and column names
-    varii = findlast(cumsum(varlengths(house.model, house.constcomps, house.constraints)) .< rr) + 1
+    varii = findlast(cumsum(varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)) .< rr) + 1
     parii = findlast(cumsum(varlengths(house.model, house.paramcomps, house.parameters)) .< cc) + 1
-    rrrelative = rr - sum(varlengths(house.model, house.constcomps, house.constraints)[1:varii-1])
+    rrrelative = rr - sum(varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)[1:varii-1])
     ccrelative = cc - sum(varlengths(house.model, house.paramcomps, house.parameters)[1:parii-1])
     vardims = getdims(house.model, house.constcomps[varii], house.constraints[varii])
     pardims = getdims(house.model, house.paramcomps[parii], house.parameters[parii])
@@ -247,7 +278,7 @@ function constraining(house::LinearProgrammingHouse, solution::Vector{Float64})
     df[:belowfail] = ""
 
     # Produce names for all constraints
-    varlens = varlengths(house.model, house.constcomps, house.constraints)
+    varlens = varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)
     names = ["" for ii in 1:sum(varlens)]
     for kk in 1:length(house.constcomps)
         ii0 = sum(varlens[1:kk-1])
@@ -284,8 +315,8 @@ houseoptimize(house::LinearProgrammingHouse) = linprog(-house.f, house.A, '<', h
 
 ## Helpers
 
-function rangeof(m::Model, name, components, names)
-    varlens = varlengths(m, components, names)
+function rangeof(m::Model, name, components, names, vardictionary::Dict{Symbol, Symbol}=Dict{Symbol, Symbol}())
+    varlens = varlengths(m, components, names, vardictionary)
     kk = findfirst(name .== names)
     sum(varlens[1:kk-1])+1:sum(varlens[1:kk])
 end
@@ -326,9 +357,21 @@ function getdims(model::Model, component::Symbol, name::Symbol)
     end
 end
 
+"""
+Return the symbols representing each of the dimensions for this variable or parameter.
+"""
+function getdimnames(model::Model, component::Symbol, name::Symbol)
+    meta = metainfo.getallcomps()
+    if name in keys(meta[(:Main, component)].parameters)
+        convert(Vector{Symbol}, meta[(:Main, component)].parameters[name].dimensions)
+    else
+        convert(Vector{Symbol}, meta[(:Main, component)].variables[name].dimensions)
+    end
+end
+
 "Return the total span occupied by each variable or parameter."
-function varlengths(model::Model, components::Vector{Symbol}, names::Vector{Symbol})
-    Int64[prod(getdims(model, components[ii], names[ii])) for ii in 1:length(components)]
+function varlengths(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, vardictionary::Dict{Symbol, Symbol}=Dict{Symbol, Symbol}())
+    Int64[prod(getdims(model, components[ii], get(vardictionary, names[ii], names[ii]))) for ii in 1:length(components)]
 end
 
 ## Matrix methods
@@ -354,18 +397,35 @@ function matrixdiagonal(dims::Vector{Int64}, gen)
     A
 end
 
+"Call the generate function for every element."
+function matrixsingle(vardims::Vector{Int64}, pardims::Vector{Int64}, gen)
+    vardimlen = prod(vardims)
+    pardimlen = prod(pardims)
+    A = spzeros(vardimlen, pardimlen)
+    for ii in 1:vardimlen
+        for jj in 1:pardimlen
+            A[ii, jj] = gen(toindex(ii, vardims)..., toindex(jj, pardims)...)
+        end
+    end
+
+    A
+end
+
 """
 Call the generate function with all combinations of the shared
 indices; shared dimensions must come in the same order and at the end
 of the dimensions lists.
 """
-function matrixintersect(rowdims::Vector{Int64}, coldims::Vector{Int64}, gen)
+function matrixintersect(rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdimnames::Vector{Symbol}, coldimnames::Vector{Symbol}, gen::Function)
     A = spzeros(prod(rowdims), prod(coldims))
 
     # Determine shared dimensions: counting from 0 = end
     numshared = 0
     while numshared < min(length(rowdims), length(coldims))
         if rowdims[end - numshared] != coldims[end - numshared]
+            break
+        end
+        if rowdimnames[end - numshared] != coldimnames[end - numshared]
             break
         end
         numshared += 1
