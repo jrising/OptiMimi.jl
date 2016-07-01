@@ -11,7 +11,7 @@ export shaftsingle
 export roomdiagonal, roomsingle, roomintersect, room_relabel, room_relabel_parameter
 export varsum
 export setobjective!, setconstraint!, setconstraintoffset!, clearconstraint!, setlower!, setupper!
-export gethouse, constraining, houseoptimize, summarizeparameters
+export gethouse, constraining, houseoptimize, summarizeparameters, findinfeasiblepair
 
 # A hallway is a vector of variables
 type LinearProgrammingHall
@@ -40,6 +40,13 @@ function +(hall1::LinearProgrammingHall, hall2::LinearProgrammingHall; skipnamec
         @assert hall1.name == hall2.name "Hall + Hall name mismatch: $(hall1.name) <> $(hall2.name); use hall_relabel?"
     end
     LinearProgrammingHall(hall1.component, hall1.name, hall1.f + hall2.f)
+end
+
+function -(hall1::LinearProgrammingHall, hall2::LinearProgrammingHall; skipnamecheck=false)
+    if !skipnamecheck
+        @assert hall1.name == hall2.name "Hall - Hall name mismatch: $(hall1.name) <> $(hall2.name); use hall_relabel?"
+    end
+    LinearProgrammingHall(hall1.component, hall1.name, hall1.f - hall2.f)
 end
 
 # A shaft is a transpose of a hallway, used for parameters
@@ -275,7 +282,7 @@ function gethouse(house::LinearProgrammingHouse, rr::Int64, cc::Int64)
     parii = findlast(cumsum(varlengths(house.model, house.paramcomps, house.parameters)) .< cc) + 1
     rrrelative = rr - sum(varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)[1:varii-1])
     ccrelative = cc - sum(varlengths(house.model, house.paramcomps, house.parameters)[1:parii-1])
-    vardims = getdims(house.model, house.constcomps[varii], house.constraints[varii])
+    vardims = getdims(house.model, house.constcomps[varii], get(house.constdictionary, house.constraints[varii], house.constraints[varii]))
     pardims = getdims(house.model, house.paramcomps[parii], house.parameters[parii])
 
     println("$(house.constcomps[varii]).$(house.constraints[varii])$(toindex(rrrelative, vardims)), $(house.paramcomps[parii]).$(house.parameters[parii])$(toindex(ccrelative, pardims)) = $(house.A[rr, cc])")
@@ -326,9 +333,60 @@ end
 houseoptimize(house::LinearProgrammingHouse) = linprog(-house.f, house.A, '<', house.b, house.lowers, house.uppers)
 houseoptimize(house::LinearProgrammingHouse, solver) = linprog(-house.f, house.A, '<', house.b, house.lowers, house.uppers, solver)
 
+function findinfeasiblepair(house::LinearProgrammingHouse, solver)
+    top = findinfeasiblepairhelper(house, solver, "top", 2, length(house.b))
+    bottom = findinfeasiblepairhelper(house, solver, "bottom", 1, length(house.b) - 1)
+
+    [top, bottom]
+end
+
+"""
+Look for the row that makes the problem feasible
+"""
+function findinfeasiblepairhelper(house::LinearProgrammingHouse, solver, direction, searchtop, searchbottom)
+    searchpoint = round(Int, (searchtop + searchbottom) / 2 + .01) # Always round up
+    println([direction, searchtop, searchbottom])
+    isfeasible = checkfeasibility(house, solver, direction, searchpoint)
+
+    if !isfeasible
+        # Look for a shorter span
+        if searchpoint == searchbottom
+            if direction == "bottom" || checkfeasibility(house, solver, direction, searchtop)
+                searchbottom
+            else
+                searchtop
+            end
+        elseif direction == "top"
+            findinfeasiblepairhelper(house, solver, direction, searchtop, searchpoint)
+        else
+            findinfeasiblepairhelper(house, solver, direction, searchpoint, searchbottom)
+        end
+    else
+        # Look for a longer span
+        if searchpoint == searchbottom
+            searchtop
+        elseif (direction == "top")
+            findinfeasiblepairhelper(house, solver, direction, searchpoint, searchbottom)
+        else
+            findinfeasiblepairhelper(house, solver, direction, searchtop, searchpoint)
+        end
+    end
+end
+
+function checkfeasibility(house::LinearProgrammingHouse, solver, direction, searchpoint)
+    if (direction == "top")
+        sol = linprog(-house.f, house.A[1:searchpoint, :], '<', house.b[1:searchpoint], house.lowers, house.uppers, solver)
+    else
+        sol = linprog(-house.f, house.A[searchpoint:end, :], '<', house.b[searchpoint:end], house.lowers, house.uppers, solver)
+    end
+
+    sol.status != :Infeasible
+end
+
+
 function summarizeparameters(house::LinearProgrammingHouse, solution::Vector{Float64})
     # Look at parameter values
-    varlens = varlengths(m, house.paramcomps, house.parameters)
+    varlens = varlengths(house.model, house.paramcomps, house.parameters)
     for ii in 1:length(house.parameters)
         println(house.parameters[ii])
         index1 = sum(varlens[1:ii-1]) + 1
