@@ -10,8 +10,8 @@ export hallsingle, hall_relabel
 export shaftsingle
 export roomdiagonal, roomsingle, roomintersect, room_relabel, room_relabel_parameter
 export varsum
-export setobjective!, setconstraint!, setconstraintoffset!, clearconstraint!, setupper!
-export gethouse, constraining, houseoptimize
+export setobjective!, setconstraint!, setconstraintoffset!, clearconstraint!, setlower!, setupper!
+export gethouse, constraining, houseoptimize, summarizeparameters
 
 # A hallway is a vector of variables
 type LinearProgrammingHall
@@ -245,6 +245,18 @@ function clearconstraint!(house::LinearProgrammingHouse, component::Symbol, vari
     house.b[constbefore+1:constbefore+constspans[ll]] = 0
 end
 
+function setlower!(house::LinearProgrammingHouse, hall::LinearProgrammingHall)
+    @assert hall.name in house.parameters "$(hall.name) not a known parameter"
+    kk = findfirst((house.paramcomps .== hall.component) & (house.parameters .== hall.name))
+    paramspans = varlengths(house.model, house.paramcomps, house.parameters)
+    @assert length(hall.f) == paramspans[kk] "Length of parameter $(hall.name) unexpected: $(length(hall.f)) <> $(paramspans[kk])"
+    before = sum(paramspans[1:kk-1])
+    for ii in 1:paramspans[kk]
+        #@assert house.b[before+ii] == 0 "Overwrite existing gradient in setobjective!"
+        house.lowers[before+ii] = hall.f[ii]
+    end
+end
+
 function setupper!(house::LinearProgrammingHouse, hall::LinearProgrammingHall)
     @assert hall.name in house.parameters "$(hall.name) not a known parameter"
     kk = findfirst((house.paramcomps .== hall.component) & (house.parameters .== hall.name))
@@ -312,6 +324,26 @@ function constraining(house::LinearProgrammingHouse, solution::Vector{Float64})
 end
 
 houseoptimize(house::LinearProgrammingHouse) = linprog(-house.f, house.A, '<', house.b, house.lowers, house.uppers)
+houseoptimize(house::LinearProgrammingHouse, solver) = linprog(-house.f, house.A, '<', house.b, house.lowers, house.uppers, solver)
+
+function summarizeparameters(house::LinearProgrammingHouse, solution::Vector{Float64})
+    # Look at parameter values
+    varlens = varlengths(m, house.paramcomps, house.parameters)
+    for ii in 1:length(house.parameters)
+        println(house.parameters[ii])
+        index1 = sum(varlens[1:ii-1]) + 1
+        index2 = sum(varlens[1:ii])
+
+        values = solution[index1:index2]
+
+        if (sum(values .!= 0) == 0)
+            println("All zero.")
+        else
+            println(values[1:min(100, index2 - index1 + 1)])
+            println("Sum: $(sum(values))")
+        end
+    end
+end
 
 ## Helpers
 
