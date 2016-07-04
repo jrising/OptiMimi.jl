@@ -11,7 +11,7 @@ export shaftsingle
 export roomdiagonal, roomsingle, roomintersect, room_relabel, room_relabel_parameter
 export varsum
 export setobjective!, setconstraint!, setconstraintoffset!, clearconstraint!, setlower!, setupper!
-export gethouse, constraining, houseoptimize, summarizeparameters, findinfeasiblepair
+export gethouse, constraining, houseoptimize, summarizeparameters, findinfeasiblepair, varlengths
 
 # A hallway is a vector of variables
 type LinearProgrammingHall
