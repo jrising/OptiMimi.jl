@@ -403,6 +403,20 @@ function summarizeparameters(house::LinearProgrammingHouse, solution::Vector{Flo
     end
 end
 
+function getconstraintsolution(house, sol, constraint)
+    constvalues = house.A * sol.sol
+
+    varlens = varlengths(m, house.constcomps, house.constraints, house.constdictionary)
+
+    ii = find(house.constraints .== constraint)[1]
+
+    index1 = sum(varlens[1:ii-1]) + 1
+    index2 = sum(varlens[1:ii])
+
+    constvalues[index1:index2]
+end
+
+
 ## Helpers
 
 function rangeof(m::Model, name, components, names, vardictionary::Dict{Symbol, Symbol}=Dict{Symbol, Symbol}())
