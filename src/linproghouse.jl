@@ -9,7 +9,7 @@ export LinearProgrammingHall, LinearProgrammingShaft, LinearProgrammingRoom, Lin
 export hallsingle, hall_relabel
 export shaftsingle
 export roomdiagonal, roomsingle, roomintersect, room_relabel, room_relabel_parameter
-export varsum
+export varsum, fromindex
 export setobjective!, setconstraint!, setconstraintoffset!, clearconstraint!, setlower!, setupper!
 export gethouse, constraining, houseoptimize, summarizeparameters, findinfeasiblepair, varlengths
 
