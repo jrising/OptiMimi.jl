@@ -100,6 +100,7 @@ function roomsingle(model::Model, component::Symbol, variable::Symbol, parameter
 end
 
 """
+Generate a room from at the intersection of two variables.
 Call gen for each shared index, passing an array to be filled for unshared indexes.
 This version assumes both variables come from the same component.
 """
@@ -314,6 +315,7 @@ function constraining(house::LinearProgrammingHouse, solution::Vector{Float64})
     ignore = baseconsts .> house.b
 
     for kk in 1:length(house.paramcomps)
+        println(kk / length(house.paramcomps))
         ii0 = sum(varlens[1:kk-1])
         for ii in 1:varlens[kk]
             df[ii0 + ii, :component] = house.paramcomps[kk]
