@@ -100,9 +100,14 @@ function roomsingle(model::Model, component::Symbol, variable::Symbol, parameter
 end
 
 """
-Generate a room from at the intersection of two variables.
-Call gen for each shared index, passing an array to be filled for unshared indexes.
+    roomintersect(model, component, variable1, variable2, gen)
+
+Generate a room at the intersection of two variables.
+
+Call `gen` for each shared index, passing an array to be filled for unshared indexes.
 This version assumes both variables come from the same component.
+
+See `matrixintersect` for the matrix generation logic.
 """
 function roomintersect(model::Model, component::Symbol, variable1::Symbol, variable2::Symbol, gen::Function)
     dims1 = getdims(model, component, variable1)
@@ -113,8 +118,14 @@ function roomintersect(model::Model, component::Symbol, variable1::Symbol, varia
 end
 
 """
-Call gen for each shared index, passing an array to be filled for unshared indexes.
+    roomintersect(model, component, variable1, component2, variable2, gen)
+
+Generate a room at the intersection of two variables.
+
+Call `gen` for each shared index, passing an array to be filled for unshared indexes.
 This version allows the variables to come from different component.
+
+See `matrixintersect` for the matrix generation logic.
 """
 function roomintersect(model::Model, component1::Symbol, variable1::Symbol, component2::Symbol, variable2::Symbol, gen::Function)
     dims1 = getdims(model, component1, variable1)
@@ -518,9 +529,32 @@ function matrixsingle(vardims::Vector{Int64}, pardims::Vector{Int64}, gen)
 end
 
 """
-Call the generate function with all combinations of the shared
-indices; shared dimensions must come in the same order and at the end
+    matrixintersect(rowdims, coldims, rowdimnames, coldimnames, gen)
+
+Call the `gen` function with all combinations of the shared indices.
+Shared dimensions must come in the same order and at the end
 of the dimensions lists.
+
+# Arguments
+* `rowdims::Vector{Int64}` and `coldims::Vector{Int64}`: the number of elements in each dimension of the row and column variables.
+* `rowdimnames::Vector{Symbol}` and `coldimnames::Vector{Symbol}`: The names of the dimensions; note that the last 1 or more dimensions should be the same in both of these lists.
+* `gen::Function`: a function of arguments (`A`, `indices`...), where `A` is a matrix of the un-shared indices and `indices` are multiple indexes describing all shared indices.
+
+# Examples
+```jldoctest
+rowdims = [3, 2]
+coldims = [4, 2]
+rowdimnames = [:region, :time]
+coldimnames = [:person, :time]
+function gen(A, tt)
+    @assert tt == 1 || tt == 2
+    @assert size(A) == (3, 4)
+    A[2, 3] = tt
+end
+A = OptiMimi.matrixintersect(rowdims, coldims, rowdimnames, coldimnames, gen)
+julia> sum(A)
+3.0
+```
 """
 function matrixintersect(rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdimnames::Vector{Symbol}, coldimnames::Vector{Symbol}, gen::Function)
     A = spzeros(prod(rowdims), prod(coldims))
