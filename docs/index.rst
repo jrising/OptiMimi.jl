@@ -11,7 +11,8 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
-
+.. automodule:: OptiMimi.jl
+.. automodule:: linproghouse.jl
 
 Indices and tables
 ==================

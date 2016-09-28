@@ -16,11 +16,16 @@ import sys
 import os
 import shlex
 from recommonmark.parser import CommonMarkParser
+import juliadoc
+
+extensions = ['juliadoc.julia', 'juliadoc.jlhelp']
+html_theme_path = [juliadoc.get_theme_dir()]
+html_sidebars = juliadoc.default_sidebars()
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-#sys.path.insert(0, os.path.abspath('.'))
+sys.path.insert(0, os.path.abspath('../src'))
 
 # -- General configuration ------------------------------------------------
 
