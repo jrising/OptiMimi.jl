@@ -542,6 +542,8 @@ of the dimensions lists.
 
 # Examples
 ```jldoctest
+using OptiMimi
+
 rowdims = [3, 2]
 coldims = [4, 2]
 rowdimnames = [:region, :time]
@@ -552,7 +554,9 @@ function gen(A, tt)
     A[2, 3] = tt
 end
 A = OptiMimi.matrixintersect(rowdims, coldims, rowdimnames, coldimnames, gen)
-julia> sum(A)
+sum(A)
+
+# output
 3.0
 ```
 """
