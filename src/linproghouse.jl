@@ -10,8 +10,8 @@ export hallsingle, hall_relabel
 export shaftsingle
 export roomdiagonal, roomsingle, roomintersect, room_relabel, room_relabel_parameter
 export varsum, fromindex
-export setobjective!, setconstraint!, setconstraintoffset!, clearconstraint!, setlower!, setupper!
-export gethouse, constraining, houseoptimize, summarizeparameters, findinfeasiblepair, varlengths
+export setobjective!, setconstraint!, setconstraintoffset!, getconstraintoffset, clearconstraint!, setlower!, setupper!
+export gethouse, constraining, houseoptimize, summarizeparameters, findinfeasiblepair, varlengths, getconstraintsolution
 
 # A hallway is a vector of variables
 type LinearProgrammingHall
@@ -240,15 +240,63 @@ function setconstraint!(house::LinearProgrammingHouse, room::LinearProgrammingRo
     house.A[constbefore+1:constbefore+constspans[ll], parambefore+1:parambefore+paramspans[kk]] = room.A
 end
 
+"""
+Set offset values from a `LinearProgrammingHall`.  See the other `setconstraintoffset!`
+"""
 function setconstraintoffset!(house::LinearProgrammingHouse, hall::LinearProgrammingHall)
-    @assert hall.name in house.constraints "$(hall.name) not a known variable"
-    kk = findfirst((house.constcomps .== hall.component) & (house.constraints .== hall.name))
+    setconstraintoffset!(house, hall.component, hall.name, hall.f)
+end
+
+"""
+    setconstraintoffset!(house, component, variable, f)
+
+Set offset values within a `LinearProgrammingHouse`.
+
+# Arguments
+* `house::LinearProgrammingHouse`: The house to set values within.
+* `component::Symbol`: The component for the constraint variable.
+* `variable::Symbol`: The variable for the constraint.
+* `f::Vector{Float64}`: The values, with all dimensions collapsed into a single vector.
+"""
+function setconstraintoffset!(house::LinearProgrammingHouse, component::Symbol, variable::Symbol, f::Vector{Float64})
+    @assert variable in house.constraints "$(variable) not a known variable"
+    kk = findfirst((house.constcomps .== component) & (house.constraints .== variable))
     constspans = varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)
-    @assert length(hall.f) == constspans[kk] "Length of parameter $(hall.name) unexpected: $(length(hall.f)) <> $(constspans[kk])"
+    @assert length(f) == constspans[kk] "Length of parameter $(variable) unexpected: $(length(f)) <> $(constspans[kk])"
     before = sum(constspans[1:kk-1])
     for ii in 1:constspans[kk]
         #@assert house.b[before+ii] == 0 "Overwrite existing gradient in setobjective!"
-        house.b[before+ii] = hall.f[ii]
+        house.b[before+ii] = f[ii]
+    end
+end
+
+"""
+    getconstraintoffset(house, component, variable, reshp)
+
+Return the values for a constraint, optionally reshaped to the original dimensions.
+
+# Arguments
+* `house::LinearProgrammingHouse`: The house from which to get the values.
+* `component::Symbol`: The component for the constraint variable.
+* `variable::Symbol`: The variable for the constraint.
+* `reshp::Bool`: Should it be reshaped to the original variable dimensions? (default: false)
+"""
+function getconstraintoffset(house::LinearProgrammingHouse, component::Symbol, variable::Symbol; reshp::Bool=false)
+    @assert variable in house.constraints "$variable not a known variable"
+
+    # Determine where to index into vector
+    constspans = varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)
+    kk = findfirst((house.constcomps .== component) & (house.constraints .== variable))
+    before = sum(constspans[1:kk-1])
+
+    # Collect the offset
+    constraintoffset = house.b[(before + 1):(before + constspans[kk])]
+
+    if reshp
+        # Reshape to original dimensions
+        reshape(constraintoffset, getdims(house.model, component, variable)...)
+    else
+        constraintoffset
     end
 end
 
@@ -419,7 +467,7 @@ end
 function getconstraintsolution(house, sol, constraint)
     constvalues = house.A * sol.sol
 
-    varlens = varlengths(m, house.constcomps, house.constraints, house.constdictionary)
+    varlens = varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)
 
     ii = find(house.constraints .== constraint)[1]
 
