@@ -10,7 +10,7 @@ export hallsingle, hall_relabel
 export shaftsingle
 export roomdiagonal, roomsingle, roomintersect, room_relabel, room_relabel_parameter
 export varsum, fromindex
-export setobjective!, setconstraint!, setconstraintoffset!, getconstraintoffset, clearconstraint!, setlower!, setupper!
+export setobjective!, setconstraint!, setconstraintoffset!, getconstraintoffset, clearconstraint!, setlower!, setupper!, addparameter!
 export gethouse, constraining, houseoptimize, summarizeparameters, findinfeasiblepair, varlengths, getconstraintsolution
 
 # A hallway is a vector of variables
@@ -81,7 +81,29 @@ type LinearProgrammingRoom
 end
 
 """
-Fill in just the diagonal
+    roomdiagonal(model, component, variable, parameter, gen)
+
+Fill in just the diagonal, assuming \$\\frac{dv_i}{dp_j} = 0\$, if \$i <>
+j\$.  Requires that the dimensions of `variable` and `parameter` are
+the same.  `gen` called for each combination of indices.
+
+\$\$\begin{array}{ccc} p_1 & p_2 & \cdots \end{array}\$\$
+\$\$\begin{array}{c}
+    v_1 \\
+    v_2 \\
+    \vdots
+    \end{array}\left(\begin{array}{ccc}
+        g(1) & 0 & \cdots \\
+        0 & g(2) & \cdots \\
+        \vdots & \vdots & \ddots
+        \end{array}\right)\$\$
+
+# Arguments
+* `model::Model`: The model containing `component`.
+* `component::Symbol`: The component containing `variable` and `parameter`.
+* `variable::Symbol`: The outcome variable, corresponding to matrix rows.
+* `parameter::Symbol`: The optimization parameter, corresponding to matrix columns.
+* `gen::Function`: The function generating gradient values.
 """
 function roomdiagonal(model::Model, component::Symbol, variable::Symbol, parameter::Symbol, gen::Function)
     dimsvar = getdims(model, component, variable)
@@ -209,6 +231,17 @@ function LinearProgrammingHouse(model::Model, paramcomps::Vector{Symbol}, parame
     f = zeros(paramlen)
     b = zeros(variablelen)
     LinearProgrammingHouse(model, paramcomps, parameters, constcomps, constraints, constdictionary, zeros(length(f)), Inf * ones(length(f)), f, A, b)
+end
+
+function addparameter!(house::LinearProgrammingHouse, component::Symbol, parameter::Symbol)
+    paramlen = prod(getdims(house.model, component, parameter))
+
+    append!(house.paramcomps, [component])
+    append!(house.parameters, [parameter])
+    append!(house.lowers, zeros(paramlen))
+    append!(house.uppers, Inf * ones(paramlen))
+    append!(house.f, zeros(paramlen))
+    house.A = [house.A spzeros(length(house.b), paramlen)]
 end
 
 function setobjective!(house::LinearProgrammingHouse, hall::LinearProgrammingHall)
@@ -348,11 +381,15 @@ function gethouse(house::LinearProgrammingHouse, rr::Int64, cc::Int64)
     println("$(house.constcomps[varii]).$(house.constraints[varii])$(toindex(rrrelative, vardims)), $(house.paramcomps[parii]).$(house.parameters[parii])$(toindex(ccrelative, pardims)) = $(house.A[rr, cc])")
 end
 
-function constraining(house::LinearProgrammingHouse, solution::Vector{Float64})
+function constraining(house::LinearProgrammingHouse, solution::Vector{Float64}; subset=[])
     # Determine which constraint (if any) is stopping an increase or decrease of each
-    df = DataFrame(solution=solution)
-    df[:component] = :na
-    df[:parameter] = :na
+    if subset == []
+        df = DataFrame(solution=solution)
+        df[:component] = :na
+        df[:parameter] = :na
+    else
+        df = DataFrame(solution=solution[subset])
+    end
     df[:abovefail] = ""
     df[:belowfail] = ""
 
@@ -373,18 +410,30 @@ function constraining(house::LinearProgrammingHouse, solution::Vector{Float64})
     println(join(names[find(baseconsts .> house.b)], ", "))
     ignore = baseconsts .> house.b
 
-    for kk in 1:length(house.paramcomps)
-        println(kk / length(house.paramcomps))
-        ii0 = sum(varlens[1:kk-1])
-        for ii in 1:varlens[kk]
-            df[ii0 + ii, :component] = house.paramcomps[kk]
-            df[ii0 + ii, :parameter] = house.parameters[kk]
+    if subset == []
+        for kk in 1:length(house.paramcomps)
+            println(kk / length(house.paramcomps))
+            ii0 = sum(varlens[1:kk-1])
+            for ii in 1:varlens[kk]
+                df[ii0 + ii, :component] = house.paramcomps[kk]
+                df[ii0 + ii, :parameter] = house.parameters[kk]
 
-            newconst = baseconsts + house.A[:, ii0 + ii] * 1e-6
-            df[ii0 + ii, :abovefail] = join(names[find((newconst .> house.b) & !ignore)], ", ")
+                newconst = baseconsts + house.A[:, ii0 + ii] * 1e-6 + 1e-6
+                df[ii0 + ii, :abovefail] = join(names[find((newconst .> house.b) & !ignore)], ", ")
 
-            newconst = baseconsts - house.A[:, ii0 + ii] * 1e-6
-            df[ii0 + ii, :belowfail] = join(names[find((newconst .> house.b) & !ignore)], ", ")
+                newconst = baseconsts - house.A[:, ii0 + ii] * 1e-6 - 1e-6
+                df[ii0 + ii, :belowfail] = join(names[find((newconst .> house.b) & !ignore)], ", ")
+            end
+        end
+    else
+        for ii in 1:length(subset)
+            println(ii / length(subset))
+
+            newconst = baseconsts + house.A[:, subset[ii]] * 1e-6 + 1e-6
+            df[ii, :abovefail] = join(names[find((newconst .> house.b) & !ignore)], ", ")
+
+            newconst = baseconsts - house.A[:, subset[ii]] * 1e-6 - 1e-6
+            df[ii, :belowfail] = join(names[find((newconst .> house.b) & !ignore)], ", ")
         end
     end
 
@@ -393,7 +442,21 @@ end
 
 houseoptimize(house::LinearProgrammingHouse) = linprog(-house.f, house.A, '<', house.b, house.lowers, house.uppers)
 houseoptimize(house::LinearProgrammingHouse, solver) = linprog(-house.f, house.A, '<', house.b, house.lowers, house.uppers, solver)
+houseoptimize(house::LinearProgrammingHouse, solver, subset::Vector{Int64}) = linprog(-house.f, house.A[subset, :], '<', house.b[subset], house.lowers, house.uppers, solver)
 
+"""
+    findinfeasiblepair(house, solver)
+
+Finds a range within the matrix for which the results become minimally
+infeasible.  In other words, suppose that the full linear programming
+matrix is \$A\$.  It returns \$i\$, \$j\$, such that \$A[1:i, :]\$ is
+infeasible, but \$A[1:i-1, :]\$ is not, and \$A[j:end, :]\$ is infeasible
+but \$A[j+1:end, :]\$ is not.
+
+# Arguments
+* `house::LinearProgrammingHouse`: An infeasible LinearProgrammingHouse.
+* `solver`: A solver object which finds the infeasibility.
+"""
 function findinfeasiblepair(house::LinearProgrammingHouse, solver)
     top = findinfeasiblepairhelper(house, solver, "top", 2, length(house.b))
     bottom = findinfeasiblepairhelper(house, solver, "bottom", 1, length(house.b) - 1)
@@ -551,8 +614,31 @@ function vectorsingle(dims::Vector{Int64}, gen)
     f
 end
 
-"Call the generate function for all indices along the diagonal."
-function matrixdiagonal(dims::Vector{Int64}, gen)
+"""
+    matrixdiagonal(dims, gen)
+
+Creates a matrix of dimensions \$\prod \text{dims}_i\$.  Call the
+generate function, `gen` for all indices along the diagonal.  All
+combinations of indices will be called, since the "diagonal" part is
+between the rows and the columns.
+
+# Arguments
+* `dims::Vector{Int64}`: The multiple dimensions collapsed into both the rows and columns.
+* `gen::Function`: A function called with an argument for each dimension.
+
+# Examples
+```jldoctest
+using OptiMimi
+
+dims = [3, 2]
+A = OptiMimi.matrixdiagonal(dims, (ii, jj) -> 1)
+sum(A)
+
+# output
+6.0
+```
+"""
+function matrixdiagonal(dims::Vector{Int64}, gen::Function)
     dimlen = prod(dims)
     A = spzeros(dimlen, dimlen)
     for ii in 1:dimlen
