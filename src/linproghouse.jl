@@ -11,7 +11,7 @@ export shaftsingle
 export roomdiagonal, roomsingle, roomintersect, room_relabel, room_relabel_parameter
 export varsum, fromindex
 export setobjective!, setconstraint!, setconstraintoffset!, getconstraintoffset, clearconstraint!, setlower!, setupper!, addparameter!
-export gethouse, constraining, houseoptimize, summarizeparameters, findinfeasiblepair, varlengths, getconstraintsolution
+export gethouse, constraining, houseoptimize, summarizeparameters, findinfeasiblepair, varlengths, getconstraintsolution, getparametersolution
 
 # A hallway is a vector of variables
 type LinearProgrammingHall
@@ -22,6 +22,11 @@ end
 
 function hallsingle(model::Model, component::Symbol, name::Symbol, gen::Function)
     LinearProgrammingHall(component, name, vectorsingle(getdims(model, component, name), gen))
+end
+
+function hallvalues(model::Model, component::Symbol, name::Symbol, values::Array{Float64})
+    gen(inds...) = values[inds...]
+    hallsingle(model, component, name, gen)
 end
 
 """Connect a derivative to another component: change the variable component and name to another component."""
@@ -58,6 +63,11 @@ end
 
 function shaftsingle(model::Model, component::Symbol, name::Symbol, gen::Function)
     LinearProgrammingShaft(component, name, vectorsingle(getdims(model, component, name), gen))
+end
+
+function shaftvalues(model::Model, component::Symbol, name::Symbol, values::Array{Float64})
+    gen(inds...) = values[inds...]
+    shaftsingle(model, component, name, gen)
 end
 
 function -(shaft::LinearProgrammingShaft)
@@ -527,6 +537,27 @@ function summarizeparameters(house::LinearProgrammingHouse, solution::Vector{Flo
     end
 end
 
+"""
+    getparametersolution(house, solution, parameter)
+
+Return the array of solution values for a given parameter.
+"""
+function getparametersolution(house::LinearProgrammingHouse, solution::Vector{Float64}, parameter::Symbol)
+    varlens = varlengths(house.model, house.paramcomps, house.parameters)
+
+    ii = find(house.parameters .== parameter)[1]
+
+    index1 = sum(varlens[1:ii-1]) + 1
+    index2 = sum(varlens[1:ii])
+
+    solution[index1:index2]
+end
+
+"""
+    getparametersolution(house, sol, constraint)
+
+Return the array of solution values for a given constraint.
+"""
 function getconstraintsolution(house, sol, constraint)
     constvalues = house.A * sol.sol
 
