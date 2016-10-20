@@ -1,7 +1,7 @@
 # OptiMimi: Mimi wrapper for optimization
 
 OptiMimi provides a simplified interface for finding optimal parameter
-valuesfor Mimi models.  The core interface consists of `problem` to
+values for Mimi models.  The core interface consists of `problem` to
 define the optimization problem, and `solution` to solve it.
 
 OptiMimi supports autodifferentiation using ForwardDiff.  To use it,
