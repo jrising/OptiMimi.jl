@@ -47,12 +47,68 @@ Solve an optimization problem.
 
 Generate the form of objective function used by the optimization, taking parameters rather than a model.
 
+<a id='OptiMimi.findinfeasiblepair-Tuple{OptiMimi.LinearProgrammingHouse,Any}' href='#OptiMimi.findinfeasiblepair-Tuple{OptiMimi.LinearProgrammingHouse,Any}'>#</a>
+**`OptiMimi.findinfeasiblepair`** &mdash; *Method*.
+
+
+
+```
+findinfeasiblepair(house, solver)
+```
+
+Finds a range within the matrix for which the results become minimally infeasible.  In other words, suppose that the full linear programming matrix is $A$.  It returns $i$, $j$, such that $A[1:i, :]$ is infeasible, but $A[1:i-1, :]$ is not, and $A[j:end, :]$ is infeasible but $A[j+1:end, :]$ is not.
+
+**Arguments**
+
+  * `house::LinearProgrammingHouse`: An infeasible LinearProgrammingHouse.
+  * `solver`: A solver object which finds the infeasibility.
+
 <a id='OptiMimi.fromindex-Tuple{Array{Int64,1},Array{Int64,1}}' href='#OptiMimi.fromindex-Tuple{Array{Int64,1},Array{Int64,1}}'>#</a>
 **`OptiMimi.fromindex`** &mdash; *Method*.
 
 
 
 Translate an index vector to an offset (+1).
+
+<a id='OptiMimi.getconstraintoffset-Tuple{OptiMimi.LinearProgrammingHouse,Symbol,Symbol}' href='#OptiMimi.getconstraintoffset-Tuple{OptiMimi.LinearProgrammingHouse,Symbol,Symbol}'>#</a>
+**`OptiMimi.getconstraintoffset`** &mdash; *Method*.
+
+
+
+```
+getconstraintoffset(house, component, variable, reshp)
+```
+
+Return the values for a constraint, optionally reshaped to the original dimensions.
+
+**Arguments**
+
+  * `house::LinearProgrammingHouse`: The house from which to get the values.
+  * `component::Symbol`: The component for the constraint variable.
+  * `variable::Symbol`: The variable for the constraint.
+  * `reshp::Bool`: Should it be reshaped to the original variable dimensions? (default: false)
+
+<a id='OptiMimi.getconstraintsolution-Tuple{Any,Any,Any}' href='#OptiMimi.getconstraintsolution-Tuple{Any,Any,Any}'>#</a>
+**`OptiMimi.getconstraintsolution`** &mdash; *Method*.
+
+
+
+```
+getparametersolution(house, sol, constraint)
+```
+
+Return the array of solution values for a given constraint.
+
+<a id='OptiMimi.getparametersolution-Tuple{OptiMimi.LinearProgrammingHouse,Array{Float64,1},Symbol}' href='#OptiMimi.getparametersolution-Tuple{OptiMimi.LinearProgrammingHouse,Array{Float64,1},Symbol}'>#</a>
+**`OptiMimi.getparametersolution`** &mdash; *Method*.
+
+
+
+```
+getparametersolution(house, solution, parameter)
+```
+
+Return the array of solution values for a given parameter.
 
 <a id='OptiMimi.hall_relabel-Tuple{OptiMimi.LinearProgrammingHall,Symbol,Symbol,Symbol}' href='#OptiMimi.hall_relabel-Tuple{OptiMimi.LinearProgrammingHall,Symbol,Symbol,Symbol}'>#</a>
 **`OptiMimi.hall_relabel`** &mdash; *Method*.
@@ -80,7 +136,29 @@ Connect a gradient to another component: change the variable component and name 
 
 
 
-Fill in just the diagonal
+```
+roomdiagonal(model, component, variable, parameter, gen)
+```
+
+Fill in just the diagonal, assuming $\frac{dv_i}{dp_j} = 0$, if $i <> j$.  Requires that the dimensions of `variable` and `parameter` are the same.  `gen` called for each combination of indices.
+
+$egin{array}{ccc} p_1 & p_2 & cdots nd{array}$
+$egin{array}{c}
+    v_1 \
+    v_2 \
+    dots
+    nd{array}left(egin{array}{ccc}
+        g(1) & 0 & cdots \
+        0 & g(2) & cdots \
+        dots & dots & ddots
+        nd{array}ight)$
+**Arguments**
+
+  * `model::Model`: The model containing `component`.
+  * `component::Symbol`: The component containing `variable` and `parameter`.
+  * `variable::Symbol`: The outcome variable, corresponding to matrix rows.
+  * `parameter::Symbol`: The optimization parameter, corresponding to matrix columns.
+  * `gen::Function`: The function generating gradient values.
 
 <a id='OptiMimi.roomintersect-Tuple{Mimi.Model,Symbol,Symbol,Symbol,Function}' href='#OptiMimi.roomintersect-Tuple{Mimi.Model,Symbol,Symbol,Symbol,Function}'>#</a>
 **`OptiMimi.roomintersect`** &mdash; *Method*.
@@ -118,6 +196,31 @@ See `matrixintersect` for the matrix generation logic.
 
 
 Fill in every element
+
+<a id='OptiMimi.setconstraintoffset!-Tuple{OptiMimi.LinearProgrammingHouse,OptiMimi.LinearProgrammingHall}' href='#OptiMimi.setconstraintoffset!-Tuple{OptiMimi.LinearProgrammingHouse,OptiMimi.LinearProgrammingHall}'>#</a>
+**`OptiMimi.setconstraintoffset!`** &mdash; *Method*.
+
+
+
+Set offset values from a `LinearProgrammingHall`.  See the other `setconstraintoffset!`
+
+<a id='OptiMimi.setconstraintoffset!-Tuple{OptiMimi.LinearProgrammingHouse,Symbol,Symbol,Array{Float64,1}}' href='#OptiMimi.setconstraintoffset!-Tuple{OptiMimi.LinearProgrammingHouse,Symbol,Symbol,Array{Float64,1}}'>#</a>
+**`OptiMimi.setconstraintoffset!`** &mdash; *Method*.
+
+
+
+```
+setconstraintoffset!(house, component, variable, f)
+```
+
+Set offset values within a `LinearProgrammingHouse`.
+
+**Arguments**
+
+  * `house::LinearProgrammingHouse`: The house to set values within.
+  * `component::Symbol`: The component for the constraint variable.
+  * `variable::Symbol`: The variable for the constraint.
+  * `f::Vector{Float64}`: The values, with all dimensions collapsed into a single vector.
 
 <a id='OptiMimi.varlengths' href='#OptiMimi.varlengths'>#</a>
 **`OptiMimi.varlengths`** &mdash; *Function*.
@@ -168,12 +271,34 @@ Return the symbols representing each of the dimensions for this variable or para
 
 Return a vector of the indices defining the parameter or variable.
 
-<a id='OptiMimi.matrixdiagonal-Tuple{Array{Int64,1},Any}' href='#OptiMimi.matrixdiagonal-Tuple{Array{Int64,1},Any}'>#</a>
+<a id='OptiMimi.matrixdiagonal-Tuple{Array{Int64,1},Function}' href='#OptiMimi.matrixdiagonal-Tuple{Array{Int64,1},Function}'>#</a>
 **`OptiMimi.matrixdiagonal`** &mdash; *Method*.
 
 
 
-Call the generate function for all indices along the diagonal.
+```
+matrixdiagonal(dims, gen)
+```
+
+Creates a matrix of dimensions $prod 	ext{dims}_i$.  Call the generate function, `gen` for all indices along the diagonal.  All combinations of indices will be called, since the "diagonal" part is between the rows and the columns.
+
+**Arguments**
+
+  * `dims::Vector{Int64}`: The multiple dimensions collapsed into both the rows and columns.
+  * `gen::Function`: A function called with an argument for each dimension.
+
+**Examples**
+
+```julia
+using OptiMimi
+
+dims = [3, 2]
+A = OptiMimi.matrixdiagonal(dims, (ii, jj) -> 1)
+sum(A)
+
+# output
+6.0
+```
 
 <a id='OptiMimi.matrixintersect-Tuple{Array{Int64,1},Array{Int64,1},Array{Symbol,1},Array{Symbol,1},Function}' href='#OptiMimi.matrixintersect-Tuple{Array{Int64,1},Array{Int64,1},Array{Symbol,1},Array{Symbol,1},Function}'>#</a>
 **`OptiMimi.matrixintersect`** &mdash; *Method*.
