@@ -14,6 +14,17 @@ export setobjective!, setconstraint!, setconstraintoffset!, getconstraintoffset,
 export gethouse, constraining, houseoptimize, summarizeparameters, findinfeasiblepair, varlengths, getconstraintsolution, getparametersolution
 
 # A hallway is a vector of variables
+"""
+    LinearProgrammingHall
+
+A vector of values, used either to describes the objective function or
+the constraint offsets.
+
+# Fields
+* `component::Symbol`: The component defining a parameter or variable.
+* `name::Symbol`: Either a parameter or variable name.
+* `f::Vector{Float64}`: A vector of values, for every entry in the variable.
+"""
 type LinearProgrammingHall
     component::Symbol
     name::Symbol
@@ -55,6 +66,19 @@ function -(hall1::LinearProgrammingHall, hall2::LinearProgrammingHall; skipnamec
 end
 
 # A shaft is a transpose of a hallway, used for parameters
+"""
+    LinearProgrammingShaft
+
+A vector of values, used either to describes the objective function or
+the constraint offsets.  This acts as the transpose of a Hall,
+although this distinction is only important for multiplying a Room by
+Shaft, which then returns a Hall.
+
+# Fields
+* `component::Symbol`: The component defining a parameter or variable.
+* `name::Symbol`: Either a parameter or variable name.
+* `x::Vector{Float64}`: A vector of values, for every entry in the variable.
+"""
 type LinearProgrammingShaft
     component::Symbol
     name::Symbol
@@ -81,7 +105,23 @@ function +(shaft1::LinearProgrammingShaft, shaft2::LinearProgrammingShaft; skipn
     LinearProgrammingShaft(shaft1.component, shaft1.name, shaft1.x + shaft2.x)
 end
 
+"""
+    LinearProgrammingRoom
 
+A matrix of values, used to describe a part of the linear programming
+problem constraint matrix (a gradient matrix).  The rows of the matrix
+correspond to variable indices, and the columns correspond to
+parameter indices.  The values are stored as a sparse matrix, since
+most parameter indices are assumed to not interact with most variable
+indices.
+
+# Fields
+* `varcomponent::Symbol`: The component defining the variable.
+* `variable::Symbol`: The variable name.
+* `paramcomponent::Symbol`: The component defining the parameter.
+* `parameter::Symbol`: The parameter name.
+* `A::SparseMatrixCSC{Float64, Int64}`: A sparse matrix of values, for every combination of the parameter and variable.
+"""
 type LinearProgrammingRoom
     varcomponent::Symbol
     variable::Symbol
@@ -90,15 +130,15 @@ type LinearProgrammingRoom
     A::SparseMatrixCSC{Float64, Int64}
 end
 
-"""
+doc"""
     roomdiagonal(model, component, variable, parameter, gen)
 
-Fill in just the diagonal, assuming \$\\frac{dv_i}{dp_j} = 0\$, if \$i <>
-j\$.  Requires that the dimensions of `variable` and `parameter` are
+Fill in just the diagonal, assuming $\frac{dv_i}{dp_j} = 0$, if $i <>
+j$.  Requires that the dimensions of `variable` and `parameter` are
 the same.  `gen` called for each combination of indices.
 
-\$\$\begin{array}{ccc} p_1 & p_2 & \cdots \end{array}\$\$
-\$\$\begin{array}{c}
+$$\begin{array}{ccc} p_1 & p_2 & \cdots \end{array}$$
+$$\begin{array}{c}
     v_1 \\
     v_2 \\
     \vdots
@@ -106,7 +146,7 @@ the same.  `gen` called for each combination of indices.
         g(1) & 0 & \cdots \\
         0 & g(2) & \cdots \\
         \vdots & \vdots & \ddots
-        \end{array}\right)\$\$
+        \end{array}\right)$$
 
 # Arguments
 * `model::Model`: The model containing `component`.
@@ -219,6 +259,31 @@ end
 function varsum(room::LinearProgrammingRoom)
     LinearProgrammingHall(room.paramcomponent, room.parameter, vec(sum(room.A, 1)))
 end
+
+doc"""
+    LinearProgrammingHouse
+
+The full description of a linear programming problem, including all
+its variables, parameters, the constraints, and the objective.
+
+The linear programming that is solved is always:
+$$\max f' x$$
+$$A x \le b$$
+$$x_{lower} \le x \le x_{upper}$$
+
+# Fields
+* `model::Model`: The model containing all components
+* `paramcomps::Vector{Symbol}`: The components defining each variable.
+* `parameters::Vector{Symbol}`: The names of each variable.
+* `constcomps::Vector{Symbol}`: The components defining each parameter.
+* `constraints::Vector{Symbol}`: The names of each parameter.
+* `constdictionary::Dict{Symbol, Symbol}`: The names used in `constraints` must be unique, but can refer to the same parameter by including an entry in this disctionary mapping the unique name to the true variable name.
+* `lowers::Vector{Float64}`: The lower bound for each parameter.
+* `uppers::Vector{Float64}`: The upper bound for each parameter.
+* `f::Vector{Float64}`: The derivative of the objective function for each parameter.
+* `A::SparseMatrixCSC{Float64, Int64}`: Each row describes the derivatives of a given row for each parameter.
+* `b::Vector{Float64}`: The maximum value for $A x$ for parameter values $x$.
+"""
 
 type LinearProgrammingHouse
     model::Model
@@ -454,14 +519,14 @@ houseoptimize(house::LinearProgrammingHouse) = linprog(-house.f, house.A, '<', h
 houseoptimize(house::LinearProgrammingHouse, solver) = linprog(-house.f, house.A, '<', house.b, house.lowers, house.uppers, solver)
 houseoptimize(house::LinearProgrammingHouse, solver, subset::Vector{Int64}) = linprog(-house.f, house.A[subset, :], '<', house.b[subset], house.lowers, house.uppers, solver)
 
-"""
+doc"""
     findinfeasiblepair(house, solver)
 
 Finds a range within the matrix for which the results become minimally
 infeasible.  In other words, suppose that the full linear programming
-matrix is \$A\$.  It returns \$i\$, \$j\$, such that \$A[1:i, :]\$ is
-infeasible, but \$A[1:i-1, :]\$ is not, and \$A[j:end, :]\$ is infeasible
-but \$A[j+1:end, :]\$ is not.
+matrix is $A$.  It returns $i$, $j$, such that $A[1:i, :]$ is
+infeasible, but $A[1:i-1, :]$ is not, and $A[j:end, :]$ is infeasible
+but $A[j+1:end, :]$ is not.
 
 # Arguments
 * `house::LinearProgrammingHouse`: An infeasible LinearProgrammingHouse.
@@ -645,10 +710,10 @@ function vectorsingle(dims::Vector{Int64}, gen)
     f
 end
 
-"""
+doc"""
     matrixdiagonal(dims, gen)
 
-Creates a matrix of dimensions \$\prod \text{dims}_i\$.  Call the
+Creates a matrix of dimensions $\prod \text{dims}_i$.  Call the
 generate function, `gen` for all indices along the diagonal.  All
 combinations of indices will be called, since the "diagonal" part is
 between the rows and the columns.

@@ -43,6 +43,10 @@ For the linear programming system, see the [Linear Programming Guide](linproghou
 
 ## Index
 
+- [`OptiMimi.LinearProgrammingHall`](linproghouse.md#OptiMimi.LinearProgrammingHall)
+- [`OptiMimi.LinearProgrammingHouse`](linproghouse.md#OptiMimi.LinearProgrammingHouse)
+- [`OptiMimi.LinearProgrammingRoom`](linproghouse.md#OptiMimi.LinearProgrammingRoom)
+- [`OptiMimi.LinearProgrammingShaft`](linproghouse.md#OptiMimi.LinearProgrammingShaft)
 - [`OptiMimi.findinfeasiblepair`](linproghouse.md#OptiMimi.findinfeasiblepair-Tuple{OptiMimi.LinearProgrammingHouse,Any})
 - [`OptiMimi.findinfeasiblepairhelper`](linproghouse.md#OptiMimi.findinfeasiblepairhelper-Tuple{OptiMimi.LinearProgrammingHouse,Any,Any,Any,Any})
 - [`OptiMimi.fromindex`](linproghouse.md#OptiMimi.fromindex-Tuple{Array{Int64,1},Array{Int64,1}})

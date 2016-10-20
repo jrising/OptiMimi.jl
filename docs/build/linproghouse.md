@@ -8,6 +8,86 @@
 
 ## Functions
 
+<a id='OptiMimi.LinearProgrammingHall' href='#OptiMimi.LinearProgrammingHall'>#</a>
+**`OptiMimi.LinearProgrammingHall`** &mdash; *Type*.
+
+
+
+```
+LinearProgrammingHall
+```
+
+A vector of values, used either to describes the objective function or the constraint offsets.
+
+**Fields**
+
+  * `component::Symbol`: The component defining a parameter or variable.
+  * `name::Symbol`: Either a parameter or variable name.
+  * `f::Vector{Float64}`: A vector of values, for every entry in the variable.
+
+<a id='OptiMimi.LinearProgrammingHouse' href='#OptiMimi.LinearProgrammingHouse'>#</a>
+**`OptiMimi.LinearProgrammingHouse`** &mdash; *Type*.
+
+
+
+```
+LinearProgrammingHouse
+```
+
+The full description of a linear programming problem, including all its variables, parameters, the constraints, and the objective.
+
+The linear programming that is solved is always: $\max f' x$ $A x \le b$ $x_{lower} \le x \le x_{upper}$
+
+**Fields**
+
+  * `model::Model`: The model containing all components
+  * `paramcomps::Vector{Symbol}`: The components defining each variable.
+  * `parameters::Vector{Symbol}`: The names of each variable.
+  * `constcomps::Vector{Symbol}`: The components defining each parameter.
+  * `constraints::Vector{Symbol}`: The names of each parameter.
+  * `constdictionary::Dict{Symbol, Symbol}`: The names used in `constraints` must be unique, but can refer to the same parameter by including an entry in this disctionary mapping the unique name to the true variable name.
+  * `lowers::Vector{Float64}`: The lower bound for each parameter.
+  * `uppers::Vector{Float64}`: The upper bound for each parameter.
+  * `f::Vector{Float64}`: The derivative of the objective function for each parameter.
+  * `A::SparseMatrixCSC{Float64, Int64}`: Each row describes the derivatives of a given row for each parameter.
+  * `b::Vector{Float64}`: The maximum value for $A x$ for parameter values $x$.
+
+<a id='OptiMimi.LinearProgrammingRoom' href='#OptiMimi.LinearProgrammingRoom'>#</a>
+**`OptiMimi.LinearProgrammingRoom`** &mdash; *Type*.
+
+
+
+```
+LinearProgrammingRoom
+```
+
+A matrix of values, used to describe a part of the linear programming problem constraint matrix (a gradient matrix).  The rows of the matrix correspond to variable indices, and the columns correspond to parameter indices.  The values are stored as a sparse matrix, since most parameter indices are assumed to not interact with most variable indices.
+
+**Fields**
+
+  * `varcomponent::Symbol`: The component defining the variable.
+  * `variable::Symbol`: The variable name.
+  * `paramcomponent::Symbol`: The component defining the parameter.
+  * `parameter::Symbol`: The parameter name.
+  * `A::SparseMatrixCSC{Float64, Int64}`: A sparse matrix of values, for every combination of the parameter and variable.
+
+<a id='OptiMimi.LinearProgrammingShaft' href='#OptiMimi.LinearProgrammingShaft'>#</a>
+**`OptiMimi.LinearProgrammingShaft`** &mdash; *Type*.
+
+
+
+```
+LinearProgrammingShaft
+```
+
+A vector of values, used either to describes the objective function or the constraint offsets.  This acts as the transpose of a Hall, although this distinction is only important for multiplying a Room by Shaft, which then returns a Hall.
+
+**Fields**
+
+  * `component::Symbol`: The component defining a parameter or variable.
+  * `name::Symbol`: Either a parameter or variable name.
+  * `x::Vector{Float64}`: A vector of values, for every entry in the variable.
+
 <a id='OptiMimi.findinfeasiblepair-Tuple{OptiMimi.LinearProgrammingHouse,Any}' href='#OptiMimi.findinfeasiblepair-Tuple{OptiMimi.LinearProgrammingHouse,Any}'>#</a>
 **`OptiMimi.findinfeasiblepair`** &mdash; *Method*.
 
@@ -103,16 +183,16 @@ roomdiagonal(model, component, variable, parameter, gen)
 
 Fill in just the diagonal, assuming $\frac{dv_i}{dp_j} = 0$, if $i <> j$.  Requires that the dimensions of `variable` and `parameter` are the same.  `gen` called for each combination of indices.
 
-$egin{array}{ccc} p_1 & p_2 & cdots nd{array}$
-$egin{array}{c}
-    v_1 \
-    v_2 \
-    dots
-    nd{array}left(egin{array}{ccc}
-        g(1) & 0 & cdots \
-        0 & g(2) & cdots \
-        dots & dots & ddots
-        nd{array}ight)$
+$\begin{array}{ccc} p_1 & p_2 & \cdots \end{array}$
+$\begin{array}{c}
+    v_1 \\
+    v_2 \\
+    \vdots
+    \end{array}\left(\begin{array}{ccc}
+        g(1) & 0 & \cdots \\
+        0 & g(2) & \cdots \\
+        \vdots & \vdots & \ddots
+        \end{array}\right)$
 **Arguments**
 
   * `model::Model`: The model containing `component`.
@@ -220,7 +300,7 @@ Return a vector of the indices defining the parameter or variable.
 matrixdiagonal(dims, gen)
 ```
 
-Creates a matrix of dimensions $prod 	ext{dims}_i$.  Call the generate function, `gen` for all indices along the diagonal.  All combinations of indices will be called, since the "diagonal" part is between the rows and the columns.
+Creates a matrix of dimensions $\prod \text{dims}_i$.  Call the generate function, `gen` for all indices along the diagonal.  All combinations of indices will be called, since the "diagonal" part is between the rows and the columns.
 
 **Arguments**
 

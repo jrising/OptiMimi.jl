@@ -4,6 +4,6 @@
 
 ```@autodocs
 Modules = [OptiMimi]
-Order   = [:function, :type]
+Order   = [:type, :function]
 Pages   = ["linproghouse.jl"]
 ```
