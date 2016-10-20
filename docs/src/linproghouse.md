@@ -1,9 +1,17 @@
 # Linear Programming Guide
 
+## Types
+
+```@autodocs
+Modules = [OptiMimi]
+Order   = [:type]
+Pages   = ["linproghouse.jl"]
+```
+
 ## Functions
 
 ```@autodocs
 Modules = [OptiMimi]
-Order   = [:type, :function]
+Order   = [:function]
 Pages   = ["linproghouse.jl"]
 ```

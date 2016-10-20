@@ -4,9 +4,9 @@
 # Linear Programming Guide
 
 
-<a id='Functions-1'></a>
+<a id='Types-1'></a>
 
-## Functions
+## Types
 
 <a id='OptiMimi.LinearProgrammingHall' href='#OptiMimi.LinearProgrammingHall'>#</a>
 **`OptiMimi.LinearProgrammingHall`** &mdash; *Type*.
@@ -87,6 +87,11 @@ A vector of values, used either to describes the objective function or the const
   * `component::Symbol`: The component defining a parameter or variable.
   * `name::Symbol`: Either a parameter or variable name.
   * `x::Vector{Float64}`: A vector of values, for every entry in the variable.
+
+
+<a id='Functions-1'></a>
+
+## Functions
 
 <a id='OptiMimi.findinfeasiblepair-Tuple{OptiMimi.LinearProgrammingHouse,Any}' href='#OptiMimi.findinfeasiblepair-Tuple{OptiMimi.LinearProgrammingHouse,Any}'>#</a>
 **`OptiMimi.findinfeasiblepair`** &mdash; *Method*.
