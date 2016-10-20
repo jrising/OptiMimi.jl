@@ -6,8 +6,8 @@ import Mimi: CertainScalarParameter, CertainArrayParameter
 import Base.*, Base.-, Base.+
 
 export LinearProgrammingHall, LinearProgrammingShaft, LinearProgrammingRoom, LinearProgrammingHouse
-export hallsingle, hall_relabel
-export shaftsingle
+export hallsingle, hall_relabel, hallvalues
+export shaftsingle, shatvalues
 export roomdiagonal, roomsingle, roomintersect, room_relabel, room_relabel_parameter
 export varsum, fromindex
 export setobjective!, setconstraint!, setconstraintoffset!, getconstraintoffset, clearconstraint!, setlower!, setupper!, addparameter!
