@@ -10,7 +10,7 @@ export hallsingle, hall_relabel, hallvalues
 export shaftsingle, shatvalues
 export roomdiagonal, roomsingle, roomintersect, room_relabel, room_relabel_parameter
 export varsum, fromindex
-export setobjective!, setconstraint!, setconstraintoffset!, getconstraintoffset, clearconstraint!, setlower!, setupper!, addparameter!
+export setobjective!, setconstraint!, setconstraintoffset!, getconstraintoffset, clearconstraint!, setlower!, setupper!, addparameter!, addconstraint!, getroom
 export gethouse, constraining, houseoptimize, summarizeparameters, findinfeasiblepair, varlengths, getconstraintsolution, getparametersolution
 
 # A hallway is a vector of variables
@@ -284,7 +284,6 @@ $$x_{lower} \le x \le x_{upper}$$
 * `A::SparseMatrixCSC{Float64, Int64}`: Each row describes the derivatives of a given row for each parameter.
 * `b::Vector{Float64}`: The maximum value for $A x$ for parameter values $x$.
 """
-
 type LinearProgrammingHouse
     model::Model
     paramcomps::Vector{Symbol}
@@ -294,9 +293,9 @@ type LinearProgrammingHouse
     constdictionary::Dict{Symbol, Symbol}
     lowers::Vector{Float64}
     uppers::Vector{Float64}
-    f::Vector{Float64}
-    A::SparseMatrixCSC{Float64, Int64}
-    b::Vector{Float64}
+    f::Vector{Float64} # length of parameters
+    A::SparseMatrixCSC{Float64, Int64} # constraint rows, parameter columns
+    b::Vector{Float64} # length of constraints
 end
 
 function LinearProgrammingHouse(model::Model, paramcomps::Vector{Symbol}, parameters::Vector{Symbol}, constcomps::Vector{Symbol}, constraints::Vector{Symbol}, constdictionary::Dict{Symbol, Symbol}=Dict{Symbol, Symbol}())
@@ -317,6 +316,16 @@ function addparameter!(house::LinearProgrammingHouse, component::Symbol, paramet
     append!(house.uppers, Inf * ones(paramlen))
     append!(house.f, zeros(paramlen))
     house.A = [house.A spzeros(length(house.b), paramlen)]
+end
+
+function addconstraint!(house::LinearProgrammingHouse, component::Symbol, constraint::Symbol, variable::Symbol)
+    varlen = prod(getdims(house.model, component, variable))
+
+    append!(house.constcomps, [component])
+    append!(house.constraints, [constraint])
+    house.constdictionary[constraint] = variable
+    append!(house.b, zeros(varlen))
+    house.A = [house.A; spzeros(varlen, length(house.f))]
 end
 
 function setobjective!(house::LinearProgrammingHouse, hall::LinearProgrammingHall)
@@ -347,6 +356,26 @@ function setconstraint!(house::LinearProgrammingHouse, room::LinearProgrammingRo
 
     house.A[constbefore+1:constbefore+constspans[ll], parambefore+1:parambefore+paramspans[kk]] = room.A
 end
+
+function getroom(house::LinearProgrammingHouse, varcomponent::Symbol, variable::Symbol, paramcomponent::Symbol, parameter::Symbol)
+    @assert parameter in house.parameters "$parameter not a known parameter"
+    @assert variable in house.constraints "$variable not a known variable"
+
+    # Determine where to index into vector
+    constspans = varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)
+    rowkk = findfirst((house.constcomps .== varcomponent) & (house.constraints .== variable))
+    rowbefore = sum(constspans[1:rowkk-1])
+
+    paramspans = varlengths(house.model, house.paramcomps, house.parameters)
+    colkk = findfirst((house.paramcomps .== paramcomponent) & (house.parameters .== parameter))
+    colbefore = sum(paramspans[1:colkk-1])
+
+    # Collect the offset
+    subA = house.A[(rowbefore + 1):(rowbefore + constspans[rowkk]), (colbefore + 1):(colbefore + paramspans[colkk])]
+
+    LinearProgrammingRoom(varcomponent, variable, paramcomponent, parameter, subA)
+end
+
 
 """
 Set offset values from a `LinearProgrammingHall`.  See the other `setconstraintoffset!`
@@ -744,7 +773,13 @@ function matrixdiagonal(dims::Vector{Int64}, gen::Function)
     A
 end
 
-"Call the generate function for every element."
+"""
+    matrixsingle(vardims, pardims, gen)
+
+Call the generate function for every element.  `gen` is given the
+dimensions for the rows/variable followed by the dimensions for the
+columns/parameters, all in order.  It should return a Float64.
+"""
 function matrixsingle(vardims::Vector{Int64}, pardims::Vector{Int64}, gen)
     vardimlen = prod(vardims)
     pardimlen = prod(pardims)
