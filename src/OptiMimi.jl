@@ -12,6 +12,7 @@ export problem, solution, unaryobjective, objevals, setparameters, nameindexes
 include("registerdiff.jl")
 include("matrixconstraints.jl")
 include("linproghouse.jl")
+include("trunclinproghouse.jl")
 include("makeroom.jl")
 
 allverbose = false
