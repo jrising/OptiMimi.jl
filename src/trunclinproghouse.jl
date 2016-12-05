@@ -80,7 +80,7 @@ function truncroom_droppardim(model::Model, room::LinearProgrammingRoom, dimensi
                                    room.paramcomponent, room.parameter, [dimension], A)
 end
 
-"""
+doc"""
     TruncatedLinearProgrammingHouse
 
 A LinearProgrammingHous which drops one or more dimnsions.
@@ -100,7 +100,7 @@ A LinearProgrammingHous which drops one or more dimnsions.
 * `A::SparseMatrixCSC{Float64, Int64}`: Each row describes the derivatives of a given row for each parameter.
 * `b::Vector{Float64}`: The maximum value for $A x$ for parameter values $x$.
 """
-type LinearProgrammingHouse
+type TruncatedLinearProgrammingHouse
     model::Model
     paramcomps::Vector{Symbol}
     parameters::Vector{Symbol}
