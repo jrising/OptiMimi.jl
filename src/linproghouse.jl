@@ -7,10 +7,12 @@ import Base.*, Base.-, Base.+
 
 export LinearProgrammingHall, LinearProgrammingShaft, LinearProgrammingRoom, LinearProgrammingHouse
 export hallsingle, hall_relabel, hallvalues
-export shaftsingle, shatvalues
+export shaftsingle, shaftvalues
 export roomdiagonal, roomsingle, roomintersect, room_relabel, room_relabel_parameter
 export varsum, fromindex
-export setobjective!, setconstraint!, setconstraintoffset!, getconstraintoffset, clearconstraint!, setlower!, setupper!, addparameter!, addconstraint!, getroom
+export setobjective!, setconstraint!, setconstraintoffset!, getconstraintoffset, clearconstraint!, setlower!, setupper!, addparameter!, addconstraint!
+## Debugging
+export getroom, getnonzerorooms
 export gethouse, constraining, houseoptimize, summarizeparameters, findinfeasiblepair, varlengths, getconstraintsolution, getparametersolution
 
 # A hallway is a vector of variables
@@ -221,6 +223,10 @@ function room_relabel_parameter(room::LinearProgrammingRoom, from::Symbol, tocom
     LinearProgrammingRoom(room.varcomponent, room.variable, tocomponent, toname, room.A)
 end
 
+"""
+    Construct a new LinearProgrammingHall, with each entry as a weighted sum of the partials for a given variable.
+        This is equivalent to translating a constraint by a functional relationship.
+"""
 function *(hall::LinearProgrammingHall, room::LinearProgrammingRoom; skipnamecheck=false)
     if !skipnamecheck
         @assert hall.name == room.variable "Hall * Room name mismatch: $(hall.name) <> $(room.variable); use room_relabel?"
@@ -249,13 +255,21 @@ function +(room1::LinearProgrammingRoom, room2::LinearProgrammingRoom; skipnamec
         @assert room1.parameter == room2.parameter "Room + Room parameter name mismatch: $(room1.parameter) <> $(room2.parameter); use room_relabel?"
         @assert room1.variable == room2.variable "Room + Room variable name mismatch: $(room1.variable) <> $(room2.variable); use room_relabel?"
     end
-    LinearProgrammingRoom(room1.varcomponent, room1.variable, room1.paramcomponent, room1.parameter, room1.A + room2.A)
+    if size(room1.A)[1] == 0 || size(room1.A)[2] == 0
+        LinearProgrammingRoom(room1.varcomponent, room1.variable, room1.paramcomponent, room1.parameter, spzeros(size(room1.A)...))
+    else
+        LinearProgrammingRoom(room1.varcomponent, room1.variable, room1.paramcomponent, room1.parameter, room1.A + room2.A)
+    end
 end
 
 function -(room::LinearProgrammingRoom)
     LinearProgrammingRoom(room.varcomponent, room.variable, room.paramcomponent, room.parameter, -room.A)
 end
 
+"""
+Construct a hall from a room by summing over rows.
+        This is equivalent to a constraint for the sum of the variables in the original room.
+"""
 function varsum(room::LinearProgrammingRoom)
     LinearProgrammingHall(room.paramcomponent, room.parameter, vec(sum(room.A, 1)))
 end
@@ -341,15 +355,19 @@ function setobjective!(house::LinearProgrammingHouse, hall::LinearProgrammingHal
 end
 
 function setconstraint!(house::LinearProgrammingHouse, room::LinearProgrammingRoom)
-    @assert room.variable in house.constraints "$(room.variable) not a known variable"
-    @assert room.parameter in house.parameters "$(room.parameter) not a known parameter"
-
     kk = findfirst((house.paramcomps .== room.paramcomponent) & (house.parameters .== room.parameter))
+    @assert kk > 0 "$(room.paramcomponent).$(room.parameter) not a known parameter"
     ll = findfirst((house.constcomps .== room.varcomponent) & (house.constraints .== room.variable))
+    @assert ll > 0 "$(room.varcomponent).$(room.variable) not a known variable"
+
     paramspans = varlengths(house.model, house.paramcomps, house.parameters)
     constspans = varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)
     @assert size(room.A, 1) == constspans[ll] "Length of variable $(room.variable) unexpected: $(size(room.A, 1)) <> $(constspans[ll])"
     @assert size(room.A, 2) == paramspans[kk] "Length of parameter $(room.parameter) unexpected: $(size(room.A, 2)) <> $(paramspans[kk])"
+
+    if size(room.A, 2) == 0 # expressions below mishandle this case
+        return
+    end
 
     parambefore = sum(paramspans[1:kk-1])
     constbefore = sum(constspans[1:ll-1])
@@ -374,6 +392,22 @@ function getroom(house::LinearProgrammingHouse, varcomponent::Symbol, variable::
     subA = house.A[(rowbefore + 1):(rowbefore + constspans[rowkk]), (colbefore + 1):(colbefore + paramspans[colkk])]
 
     LinearProgrammingRoom(varcomponent, variable, paramcomponent, parameter, subA)
+end
+
+"""Return a list of all rooms (parameter+component and variable+component) that are related by the derivative matrix.
+"""
+function getnonzerorooms(house::LinearProgrammingHouse)
+    df = DataFrame(varcomponent=Symbol[], variable=Symbol[], paramcomponent=Symbol[], parameter=Symbol[])
+    for kk in 1:length(house.paramcomps)
+        for ll in 1:length(house.constcomps)
+            room = getroom(house, house.constcomps[ll], house.constraints[ll], house.paramcomps[kk], house.parameters[kk])
+            if !isempty(nonzeros(room.A))
+                push!(df, [house.constcomps[ll], house.constraints[ll], house.paramcomps[kk], house.parameters[kk]])
+            end
+        end
+    end
+
+    df
 end
 
 
