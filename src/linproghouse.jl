@@ -3,7 +3,7 @@ using DataFrames
 
 import Mimi.metainfo
 import Mimi: CertainScalarParameter, CertainArrayParameter
-import Base.*, Base.-, Base.+
+import Base.*, Base.-, Base.+, Base.max
 
 export LinearProgrammingHall, LinearProgrammingShaft, LinearProgrammingRoom, LinearProgrammingHouse
 export hallsingle, hall_relabel, hallvalues
