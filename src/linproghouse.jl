@@ -67,6 +67,13 @@ function -(hall1::LinearProgrammingHall, hall2::LinearProgrammingHall; skipnamec
     LinearProgrammingHall(hall1.component, hall1.name, hall1.f - hall2.f)
 end
 
+function max(hall1::LinearProgrammingHall, hall2::LinearProgrammingHall; skipnamecheck=false)
+    if !skipnamecheck
+        @assert hall1.name == hall2.name "Hall - Hall name mismatch: $(hall1.name) <> $(hall2.name); use hall_relabel?"
+    end
+    LinearProgrammingHall(hall1.component, hall1.name, max(hall1.f, hall2.f))
+end
+
 # A shaft is a transpose of a hallway, used for parameters
 """
     LinearProgrammingShaft
