@@ -53,6 +53,13 @@ function -(hall::LinearProgrammingHall)
     LinearProgrammingHall(hall.component, hall.name, -hall.f)
 end
 
+"""
+    hall1 + hall2
+
+Construct a new LinearProgrammingHall which is the element-wise
+sum of the values in hall1 and hall2, which must refer to
+the same variable.
+"""
 function +(hall1::LinearProgrammingHall, hall2::LinearProgrammingHall; skipnamecheck=false)
     if !skipnamecheck
         @assert hall1.name == hall2.name "Hall + Hall name mismatch: $(hall1.name) <> $(hall2.name); use hall_relabel?"
@@ -60,6 +67,13 @@ function +(hall1::LinearProgrammingHall, hall2::LinearProgrammingHall; skipnamec
     LinearProgrammingHall(hall1.component, hall1.name, hall1.f + hall2.f)
 end
 
+"""
+    hall1 - hall2
+
+Construct a new LinearProgrammingHall which is the element-wise
+difference in the values in hall1 and hall2, which must refer to
+the same variable.
+"""
 function -(hall1::LinearProgrammingHall, hall2::LinearProgrammingHall; skipnamecheck=false)
     if !skipnamecheck
         @assert hall1.name == hall2.name "Hall - Hall name mismatch: $(hall1.name) <> $(hall2.name); use hall_relabel?"
@@ -67,6 +81,13 @@ function -(hall1::LinearProgrammingHall, hall2::LinearProgrammingHall; skipnamec
     LinearProgrammingHall(hall1.component, hall1.name, hall1.f - hall2.f)
 end
 
+"""
+    max(hall1, hall2)
+
+Construct a new LinearProgrammingHall which is the element-wise
+maximum value of each entry in hall1 and hall2, which must refer to
+the same variable.
+"""
 function max(hall1::LinearProgrammingHall, hall2::LinearProgrammingHall; skipnamecheck=false)
     if !skipnamecheck
         @assert hall1.name == hall2.name "Hall - Hall name mismatch: $(hall1.name) <> $(hall2.name); use hall_relabel?"
