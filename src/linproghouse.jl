@@ -2,7 +2,6 @@ using MathProgBase
 using DataFrames
 
 import Mimi.metainfo
-import Mimi: CertainScalarParameter, CertainArrayParameter
 import Base.*, Base.-, Base.+, Base.max
 
 export LinearProgrammingHall, LinearProgrammingShaft, LinearProgrammingRoom, LinearProgrammingHouse
@@ -14,6 +13,8 @@ export setobjective!, setconstraint!, setconstraintoffset!, getconstraintoffset,
 ## Debugging
 export getroom, getnonzerorooms
 export gethouse, constraining, houseoptimize, summarizeparameters, findinfeasiblepair, varlengths, getconstraintsolution, getparametersolution
+
+include("metamimi.jl")
 
 # A hallway is a vector of variables
 """
@@ -756,20 +757,6 @@ function fromindex(index::Vector{Int64}, dims::Vector{Int64})
     end
 
     return offset
-end
-
-"Return a vector of the indices defining the parameter or variable."
-function getdims(model::Model, component::Symbol, name::Symbol)
-    if name in keys(model.parameters)
-        if isa(model.parameters[name], CertainScalarParameter)
-            Int64[1]
-        elseif isa(model.parameters[name], CertainArrayParameter)
-            Int64[size(model.parameters[name].values)...]
-        end
-    else
-        meta = metainfo.getallcomps()
-        convert(Vector{Int64}, map(dim -> model.indices_counts[dim], meta[(:Main, component)].variables[name].dimensions))
-    end
 end
 
 """

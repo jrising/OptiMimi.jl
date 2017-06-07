@@ -14,6 +14,7 @@ include("matrixconstraints.jl")
 include("linproghouse.jl")
 include("trunclinproghouse.jl")
 include("makeroom.jl")
+include("metamimi.jl")
 
 allverbose = false
 objevals = 0
@@ -35,12 +36,6 @@ type LinprogOptimizationProblem{T}
     matrixconstraints::Vector{MatrixConstraintSet}
     exlowers::Vector{T}
     exuppers::Vector{T}
-end
-
-"""Return the dimensions of a parameter."""
-function getdimensions(model::Model, component::Symbol, name::Symbol)
-    indexes = getindexlabels(model, component, name)
-    map(index -> getindexcount(model, index), indexes)
 end
 
 """Returns (ii, len, isscalar) with the index of each symbol and its length."""
