@@ -5,7 +5,7 @@ using ForwardDiff
 using MathProgBase
 using Compat
 
-import Mimi: Model, CertainScalarParameter, CertainArrayParameter, addparameter
+import Mimi: Model
 
 export problem, solution, unaryobjective, objevals, setparameters, nameindexes
 
@@ -37,30 +37,34 @@ type LinprogOptimizationProblem{T}
     exuppers::Vector{T}
 end
 
+"""Return the dimensions of a parameter."""
+function getdimensions(model::Model, component::Symbol, name::Symbol)
+    indexes = getindexlabels(model, component, name)
+    map(index -> getindexcount(model, index), indexes)
+end
+
 """Returns (ii, len, isscalar) with the index of each symbol and its length."""
-function nameindexes(model::Model, names::Vector{Symbol})
-    ii = 1
-    for name in names
-        if isa(model.parameters[name], CertainScalarParameter)
-            produce((ii, 1, true))
-        elseif isa(model.parameters[name], CertainArrayParameter)
-            produce((ii, length(model.parameters[name].values), false))
+function nameindexes(model::Model, components::Vector{Symbol}, names::Vector{Symbol})
+    for ii in 1:length(components)
+        dims = getdimensions(model, components[ii], names[ii])
+        if length(dims) == 0
+            produce((ii, 1, true)) # It's a scalar
         else
-            error("Unknown parameter type for " + string(name))
+            produce((ii, prod(dims), false))
         end
-        ii += 1
     end
 end
 
 """Set parameters in a model."""
 function setparameters(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, xx::Vector)
     startindex = 1
-    for (ii, len, isscalar) in @task nameindexes(model, names)
+    for (ii, len, isscalar) in @task nameindexes(model, components, names)
         if isscalar
-            model.components[components[ii]].Parameters.(names[ii]) = xx[startindex]
+            setfield!(get(model.mi).components[components[ii]].Parameters, names[ii], xx[startindex])
         else
-            shape = size(model.components[components[ii]].Parameters.(names[ii]))
-            model.components[components[ii]].Parameters.(names[ii]) = reshape(collect(Number, xx[startindex:(startindex+len - 1)]), shape)
+            shape = getdimensions(model, components[ii], names[ii])
+            reshaped = reshape(collect(Number, xx[startindex:(startindex+len - 1)]), shape)
+            setfield!(get(model.mi).components[components[ii]].Parameters, names[ii], reshaped)
         end
         startindex += len
     end
@@ -120,9 +124,9 @@ function autodiffobjective(model::Model, components::Vector{Symbol}, names::Vect
 end
 
 """Create a 0 point."""
-function make0(model::Model, names::Vector{Symbol})
+function make0(model::Model, components::Vector{Symbol}, names::Vector{Symbol})
     initial = Float64[]
-    for (ii, len, isscalar) in @task nameindexes(model, names)
+    for (ii, len, isscalar) in @task nameindexes(model, components, names)
         append!(initial, [0. for jj in 1:len])
     end
 
@@ -137,7 +141,7 @@ function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vecto
 
     ## Replace with eachname
     totalvars = 0
-    for (ii, len, isscalar) in @task nameindexes(model, names)
+    for (ii, len, isscalar) in @task nameindexes(model, components, names)
         append!(my_lowers, [lowers[ii] for jj in 1:len])
         append!(my_uppers, [uppers[ii] for jj in 1:len])
         totalvars += len
@@ -246,7 +250,7 @@ function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vecto
 
     ## Replace with eachname
     totalvars = 0
-    for (ii, len, isscalar) in @task nameindexes(model, names)
+    for (ii, len, isscalar) in @task nameindexes(model, components, names)
         append!(my_lowers, [lowers[ii] for jj in 1:len])
         append!(my_uppers, [uppers[ii] for jj in 1:len])
         totalvars += len
@@ -260,7 +264,7 @@ function solution(optprob::LinprogOptimizationProblem, verbose=false)
     global allverbose
     allverbose = verbose
 
-    initial = make0(optprob.model, optprob.names)
+    initial = make0(optprob.model, optprob.components, optprob.names)
 
     if verbose
         println("Optimizing...")
