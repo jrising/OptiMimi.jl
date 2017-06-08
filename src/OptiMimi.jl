@@ -41,7 +41,7 @@ end
 """Returns (ii, len, isscalar) with the index of each symbol and its length."""
 function nameindexes(model::Model, components::Vector{Symbol}, names::Vector{Symbol})
     for ii in 1:length(components)
-        dims = getdimensions(model, components[ii], names[ii])
+        dims = getdims(model, components[ii], names[ii])
         if length(dims) == 0
             produce((ii, 1, true)) # It's a scalar
         else
@@ -57,7 +57,7 @@ function setparameters(model::Model, components::Vector{Symbol}, names::Vector{S
         if isscalar
             setfield!(get(model.mi).components[components[ii]].Parameters, names[ii], xx[startindex])
         else
-            shape = getdimensions(model, components[ii], names[ii])
+            shape = getdims(model, components[ii], names[ii])
             reshaped = reshape(collect(Number, xx[startindex:(startindex+len - 1)]), shape)
             setfield!(get(model.mi).components[components[ii]].Parameters, names[ii], reshaped)
         end
