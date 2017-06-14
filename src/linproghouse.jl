@@ -584,10 +584,10 @@ function constraining(house::LinearProgrammingHouse, solution::Vector{Float64}; 
                 df[ii0 + ii, :component] = house.paramcomps[kk]
                 df[ii0 + ii, :parameter] = house.parameters[kk]
 
-                newconst = baseconsts + house.A[:, ii0 + ii] * 1e-6 + 1e-6
+                newconst = baseconsts + house.A[:, ii0 + ii] * 1e-6 + (house.A[:, ii0 + ii] .> 0) * 1e-6
                 df[ii0 + ii, :abovefail] = join(names[find((newconst .> house.b) & !ignore)], ", ")
 
-                newconst = baseconsts - house.A[:, ii0 + ii] * 1e-6 - 1e-6
+                newconst = baseconsts - house.A[:, ii0 + ii] * 1e-6 - (house.A[:, ii0 + ii] .> 0) * 1e-6
                 df[ii0 + ii, :belowfail] = join(names[find((newconst .> house.b) & !ignore)], ", ")
             end
         end
