@@ -15,6 +15,7 @@ include("linproghouse.jl")
 include("trunclinproghouse.jl")
 include("makeroom.jl")
 include("metamimi.jl")
+include("uncertainty.jl")
 
 allverbose = false
 objevals = 0
