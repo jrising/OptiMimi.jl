@@ -28,6 +28,7 @@ for tt in 10:-1:1
 end
 
 println(reverse(consumption_reverse))
+println(reverse(VV_reverse))
 
 # OptiMimi solution
 
@@ -37,17 +38,22 @@ println(reverse(consumption_reverse))
     consumption = Parameter(index=[time])
 
     # The y-value of the quadratic at the x-value
-    utility = Variable(index=[index])
-    disaster::Bool = Variable(index=[index])
+    utility = Variable(index=[time])
+    disaster::Bool = Variable(index=[time])
+    bonus = Variable()
 end
 
 function run_timestep(state::Bellmano, tt::Int64)
     v = state.Variables
     p = state.Parameters
 
+    v.bonus = 0
     if tt == 1 || !v.disaster[tt-1]
         v.utility[tt] = sqrt(p.consumption[tt])
         v.disaster[tt] = rand() < p.consumption[tt]
+	if tt == 10 && !v.disaster[tt]
+	    v.bonus = 10000
+	end
     else
         v.utility[tt] = 0
         v.disaster[tt] = true
@@ -58,6 +64,12 @@ m = Model()
 setindex(m, :time, collect(1:10))
 
 bellmano = addcomponent(m, Bellmano)
-bellmano[:consumption] = repmat([0.], 10)
+bellmano[:consumption] = repmat([.25], 10)
 
-uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(sqrt(m[:Bellmano, :utility]) .* exp(-(0:9) * .05)), () -> nothing)
+run(m)
+m[:Bellmano, :utility]
+
+import OptiMimi.uncertainproblem
+
+prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(sqrt(m[:Bellmano, :utility]) .* exp(-(0:9) * .05)) + m[:Bellmano, :bonus] * exp(-10 * .05), (model) -> nothing)
+solution(prob)

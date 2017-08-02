@@ -59,7 +59,7 @@ function setparameters(model::Model, components::Vector{Symbol}, names::Vector{S
             setfield!(get(model.mi).components[components[ii]].Parameters, names[ii], xx[startindex])
         else
             shape = getdims(model, components[ii], names[ii])
-            reshaped = reshape(collect(Number, xx[startindex:(startindex+len - 1)]), shape)
+            reshaped = reshape(collect(model.numberType, xx[startindex:(startindex+len - 1)]), tuple(shape...))
             setfield!(get(model.mi).components[components[ii]].Parameters, names[ii], reshaped)
         end
         startindex += len
@@ -129,9 +129,7 @@ function make0(model::Model, components::Vector{Symbol}, names::Vector{Symbol})
     initial
 end
 
-
-"""Setup an optimization problem."""
-function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}, objective::Function; constraints::Vector{Function}=Function[], algorithm::Symbol=:LN_COBYLA_OR_LD_MMA)
+function expandlimits{T<:Real}(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T})
     my_lowers = T[]
     my_uppers = T[]
 
@@ -142,6 +140,13 @@ function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vecto
         append!(my_uppers, [uppers[ii] for jj in 1:len])
         totalvars += len
     end
+
+    my_lowers, my_uppers, totalvars
+end
+
+"""Setup an optimization problem."""
+function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}, objective::Function; constraints::Vector{Function}=Function[], algorithm::Symbol=:LN_COBYLA_OR_LD_MMA)
+    my_lowers, my_uppers, totalvars = expandlimits(model, components, names)
 
     if algorithm == :GUROBI_LINPROG
         # Make no changes to objective!
