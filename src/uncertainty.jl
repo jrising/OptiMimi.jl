@@ -39,11 +39,11 @@ function create_entity(num)
 end
 
 function fitness(ent)
-    obj = objective(ent.parameters)
+    fit = objective(ent.parameters)
     if ent.fitness != nothing
-        ent.fitness * .9 + obj * .1
+        ent.fitness * .9 + fit * .1
     else
-        obj * .1
+        fit * .1
     end
 end
 
@@ -102,13 +102,18 @@ end
 
 
 """Setup an optimization over Monte Carlo uncertainty."""
-function uncertainproblem(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{Float64}, uppers::Vector{Float64}, objective::Function, montecarlo::Function)
+function uncertainproblem(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{Float64}, uppers::Vector{Float64}, objective::Function, montecarlo::Function, mcperlife::Int64)
     my_lowers, my_uppers, totalvars = expandlimits(model, components, names, lowers, uppers)
 
     my_unaryobjective = unaryobjective(model, components, names, objective)
     function my_objective(parameters::Vector{Float64})
-        montecarlo(model)
-        my_unaryobjective(parameters)
+        total = 0
+        for iter in 1:mcperlife
+            montecarlo(model)
+            total += my_unaryobjective(parameters)
+        end
+
+        total / mcperlife
     end
 
     UncertainOptimizationProblem(model, components, names, my_objective, my_lowers, my_uppers)

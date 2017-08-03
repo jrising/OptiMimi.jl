@@ -52,7 +52,7 @@ function run_timestep(state::Bellmano, tt::Int64)
         v.utility[tt] = sqrt(p.consumption[tt])
         v.disaster[tt] = rand() < p.consumption[tt]
 	if tt == 10 && !v.disaster[tt]
-	    v.bonus = 10000
+	    v.bonus = 1
 	end
     else
         v.utility[tt] = 0
@@ -71,5 +71,5 @@ m[:Bellmano, :utility]
 
 import OptiMimi.uncertainproblem
 
-prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(sqrt(m[:Bellmano, :utility]) .* exp(-(0:9) * .05)) + m[:Bellmano, :bonus] * exp(-10 * .05), (model) -> nothing)
+prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(sqrt(m[:Bellmano, :utility]) .* exp(-(0:9) * .05)) + m[:Bellmano, :bonus] * exp(-10 * .05), (model) -> nothing, 20)
 solution(prob)
