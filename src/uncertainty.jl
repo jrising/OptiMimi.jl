@@ -14,6 +14,7 @@ lowers = Array(Float64, 0)
 uppers = Array(Float64, 0)
 objective = (parameters) -> 0
 iterations = 0
+lifeseed = 0
 
 function prepare(lows::Vector{Float64}, his::Vector{Float64}, obj::Function)
     global paramsize, lowers, uppers, objective, iterations
@@ -23,6 +24,7 @@ function prepare(lows::Vector{Float64}, his::Vector{Float64}, obj::Function)
     uppers = his
     objective = obj
     iterations = 0
+    lifeseed = 1
 end
 
 type ParameterSet <: Entity
@@ -39,6 +41,7 @@ function create_entity(num)
 end
 
 function fitness(ent)
+    srand(lifeseed)
     fit = objective(ent.parameters)
     if ent.fitness != nothing
         ent.fitness * .9 + fit * .1
@@ -48,15 +51,17 @@ function fitness(ent)
 end
 
 function group_entities(pop)
-    global iterations
+    global iterations, lifeseed
 
-    iterations = iterations + 1
+    iterations += 1
     if iterations % 100 == 0
         println(pop[1])
 	if iterations >= 10000
 	    return
 	end
     end
+
+    lifeseed += 1
 
     # simple naive groupings that pair the best entitiy with every other
     dist = TriangularDist(1, length(pop)+1, 1)
@@ -125,6 +130,7 @@ function solution(optprob::UncertainOptimizationProblem)
 
     gamodel = runga(MimiGA; initial_pop_size = 16)
 
-    GeneticAlgorithms.population(gamodel)  # the the latest population when the GA exited
+    population = GeneticAlgorithms.population(gamodel)  # the the latest population when the GA exited
+    mean(hcat([entity.parameters for entity in population]...), 2)
 end
 

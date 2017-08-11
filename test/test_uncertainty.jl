@@ -70,6 +70,45 @@ run(m)
 m[:Bellmano, :utility]
 
 import OptiMimi.uncertainproblem
+using DataFrames
 
-prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(sqrt(m[:Bellmano, :utility]) .* exp(-(0:9) * .05)) + m[:Bellmano, :bonus] * exp(-10 * .05), (model) -> nothing, 20)
-solution(prob)
+df = DataFrame(mcperlife=[], cons1=[], cons2=[], cons3=[], cons4=[], cons5=[], cons6=[], cons7=[], cons8=[], cons9=[], cons10=[])
+push!(df, [Inf; reverse(consumption_reverse)[1:10]])
+
+for mcperlife in 1:5:40
+    println(mcperlife)
+    prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(sqrt(m[:Bellmano, :utility]) .* exp(-(0:9) * .05)) + m[:Bellmano, :bonus] * exp(-10 * .05), (model) -> nothing, mcperlife)
+    soln = solution(prob)
+    push!(df, [mcperlife; soln])
+    println(df)
+end
+
+writetable("attempts.csv", df)
+
+for mcperlife in 50:10:100
+    println(mcperlife)
+    prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(sqrt(m[:Bellmano, :utility]) .* exp(-(0:9) * .05)) + m[:Bellmano, :bonus] * exp(-10 * .05), (model) -> nothing, mcperlife)
+    soln = solution(prob)
+    push!(df, [mcperlife; soln])
+    println(df)
+end
+
+writetable("attempts.csv", df)
+
+for mcperlife in 120:20:200
+    println(mcperlife)
+    prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(sqrt(m[:Bellmano, :utility]) .* exp(-(0:9) * .05)) + m[:Bellmano, :bonus] * exp(-10 * .05), (model) -> nothing, mcperlife)
+    soln = solution(prob)
+    push!(df, [mcperlife; soln])
+    println(df)
+end
+
+writetable("attempts.csv", df)
+
+using MultivariateStats
+
+llsq(convert(Matrix{Float64}, [ones(nrow(df)-1) log(convert(Vector{Float64}, df[:mcperlife][2:end]))]), convert(Vector{Float64}, df[:cons1][2:end]); bias=false)
+
+finite = df[:cons1] .> df[1, :cons1]
+
+llsq(convert(Matrix{Float64}, [ones(sum(finite)) convert(Vector{Float64}, df[:mcperlife][finite])]), convert(Vector{Float64}, log(df[:cons1][finite] - df[1, :cons1])); bias=false)

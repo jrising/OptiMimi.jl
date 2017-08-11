@@ -205,7 +205,8 @@ end
 """
     roomintersect(model, component, variable1, variable2, gen)
 
-Generate a room at the intersection of two variables.
+Generate a room at the intersection of two variables.  Variable1 is
+the constraint, and variable2 has the optimization parameter.
 
 Call `gen` for each shared index, passing an array to be filled for unshared indexes.
 This version assumes both variables come from the same component.
@@ -237,6 +238,16 @@ function roomintersect(model::Model, component1::Symbol, variable1::Symbol, comp
     dimnames2 = getdimnames(model, component2, variable2)
     LinearProgrammingRoom(component1, variable1, component2, variable2, matrixintersect(dims1, dims2, dimnames1, dimnames2, gen))
 end
+
+"""
+Create a room to be filled in later
+"""
+function roomempty(model::Model, component::Symbol, variable::Symbol, parameter::Symbol)
+    dimsvar = getdims(model, component, variable)
+    dimspar = getdims(model, component, parameter)
+    LinearProgrammingRoom(component, variable, component, parameter, matrixempty(dimsvar, dimspar))
+end
+
 
 """Connect a gradient to another component: change the variable component and name to another component."""
 function room_relabel(room::LinearProgrammingRoom, from::Symbol, tocomponent::Symbol, toname::Symbol)
@@ -902,4 +913,13 @@ function matrixintersect(rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdimn
     end
 
     A
+end
+
+"""
+Create an empty matrix for the given variables
+"""
+function matrixempty(vardims::Vector{Int64}, pardims::Vector{Int64})
+    vardimlen = prod(vardims)
+    pardimlen = prod(pardims)
+    spzeros(vardimlen, pardimlen)
 end
