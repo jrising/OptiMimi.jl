@@ -28,10 +28,12 @@ function run_timestep(state::Bellmano, tt::Int64)
     v = state.Variables
     p = state.Parameters
 
+    #v.utility[tt] = sqrt(p.consumption[tt]) * (1 - p.consumption[tt])
+
     if rand() < p.consumption[tt]
         v.utility[tt] = 0
     else
-        v.utility[tt] = sqrt(p.consumption[tt])
+        v.utility[tt] = sqrt(max(0, p.consumption[tt]))
     end
 end
 
@@ -39,7 +41,7 @@ m = Model()
 setindex(m, :time, collect(1:10))
 
 bellmano = addcomponent(m, Bellmano)
-bellmano[:consumption] = repmat([.33], 10) # XXX: Try initializing at the right answer
+bellmano[:consumption] = repmat([.25], 10)
 
 run(m)
 m[:Bellmano, :utility]
@@ -50,6 +52,14 @@ using DataFrames
 df = DataFrame(mcperlife=[], cons1=[], cons2=[], cons3=[], cons4=[], cons5=[], cons6=[], cons7=[], cons8=[], cons9=[], cons10=[])
 push!(df, [Inf; repmat([1/3], 10)])
 
+# prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(sqrt(m[:Bellmano, :utility]) .* exp(-(0:9) * .05)), (model) -> nothing, 1)
+# soln = solution(prob)
+# push!(df, [1; soln])
+# println(df)
+# writetable("attempts-nonstoch.csv", df)
+
+exit()
+
 for mcperlife in 1:5:41
     println(mcperlife)
     prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(sqrt(m[:Bellmano, :utility]) .* exp(-(0:9) * .05)), (model) -> nothing, mcperlife)
@@ -58,7 +68,7 @@ for mcperlife in 1:5:41
     println(df)
 end
 
-writetable("attempts.csv", df)
+writetable("attempts-nonstoch.csv", df)
 
 for mcperlife in 50:10:100
     println(mcperlife)
@@ -68,7 +78,7 @@ for mcperlife in 50:10:100
     println(df)
 end
 
-writetable("attempts.csv", df)
+writetable("attempts-nonstoch.csv", df)
 
 for mcperlife in 120:20:200
     println(mcperlife)
@@ -78,7 +88,7 @@ for mcperlife in 120:20:200
     println(df)
 end
 
-writetable("attempts.csv", df)
+writetable("attempts-nonstoch.csv", df)
 
 using MultivariateStats
 
