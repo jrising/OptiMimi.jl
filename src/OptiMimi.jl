@@ -153,7 +153,7 @@ function expandlimits{T<:Real}(model::Model, components::Vector{Symbol}, names::
         totalvars += len
     end
 
-    my_lower, my_uppers, totalvars
+    my_lowers, my_uppers, totalvars
 end
 
 """Setup an optimization problem."""
@@ -251,6 +251,7 @@ function solution(optprob::OptimizationProblem, generator::Function; maxiter=Inf
     if verbose
         println("Optimizing...")
     end
+    maxeval!(optprob.opt, maxiter)
     (minf,minx,ret) = optimize(optprob.opt, initial)
 
     (minf, minx)
