@@ -44,7 +44,6 @@ bellmano = addcomponent(m, Bellmano)
 bellmano[:consumption] = repmat([.25], 10)
 
 run(m)
-m[:Bellmano, :utility]
 
 import OptiMimi.uncertainproblem
 using DataFrames
@@ -52,48 +51,12 @@ using DataFrames
 df = DataFrame(mcperlife=[], cons1=[], cons2=[], cons3=[], cons4=[], cons5=[], cons6=[], cons7=[], cons8=[], cons9=[], cons10=[])
 push!(df, [Inf; repmat([1/3], 10)])
 
-# prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(sqrt(m[:Bellmano, :utility]) .* exp(-(0:9) * .05)), (model) -> nothing, 1)
-# soln = solution(prob)
-# push!(df, [1; soln])
-# println(df)
-# writetable("attempts-nonstoch.csv", df)
-
-exit()
-
-for mcperlife in 1:5:41
+for mcperlife in 1:2:10
     println(mcperlife)
     prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(sqrt(m[:Bellmano, :utility]) .* exp(-(0:9) * .05)), (model) -> nothing, mcperlife)
-    soln = solution(prob)
+    soln = solution(prob, () -> repmat([.25], 10), 100)
     push!(df, [mcperlife; soln])
     println(df)
 end
 
 writetable("attempts-nonstoch.csv", df)
-
-for mcperlife in 50:10:100
-    println(mcperlife)
-    prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(sqrt(m[:Bellmano, :utility]) .* exp(-(0:9) * .05)), (model) -> nothing, mcperlife)
-    soln = solution(prob)
-    push!(df, [mcperlife; soln])
-    println(df)
-end
-
-writetable("attempts-nonstoch.csv", df)
-
-for mcperlife in 120:20:200
-    println(mcperlife)
-    prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(sqrt(m[:Bellmano, :utility]) .* exp(-(0:9) * .05)), (model) -> nothing, mcperlife)
-    soln = solution(prob)
-    push!(df, [mcperlife; soln])
-    println(df)
-end
-
-writetable("attempts-nonstoch.csv", df)
-
-using MultivariateStats
-
-llsq(convert(Matrix{Float64}, [ones(nrow(df)-1) log(convert(Vector{Float64}, df[:mcperlife][2:end]))]), convert(Vector{Float64}, df[:cons1][2:end]); bias=false)
-
-finite = df[:cons1] .> df[1, :cons1]
-
-llsq(convert(Matrix{Float64}, [ones(sum(finite)) convert(Vector{Float64}, df[:mcperlife][finite])]), convert(Vector{Float64}, log(convert(Vector{Float64}, df[:cons1][finite]) - df[1, :cons1])); bias=false)
