@@ -48,14 +48,24 @@ run(m)
 import OptiMimi.uncertainproblem
 using DataFrames
 
-df = DataFrame(mcperlife=[], cons1=[], cons2=[], cons3=[], cons4=[], cons5=[], cons6=[], cons7=[], cons8=[], cons9=[], cons10=[])
-push!(df, [Inf; repmat([1/3], 10)])
+df = DataFrame(mcperlife=[], cons1=[], cons2=[], cons3=[], cons4=[], cons5=[], cons6=[], cons7=[], cons8=[], cons9=[], cons10=[], cons1serr=[], cons2serr=[], cons3serr=[], cons4serr=[], cons5serr=[], cons6serr=[], cons7serr=[], cons8serr=[], cons9serr=[], cons10serr=[])
+push!(df, [Inf; repmat([1/3], 10); repmat([0], 10)])
 
 for mcperlife in 1:2:10
     println(mcperlife)
-    prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(sqrt(m[:Bellmano, :utility]) .* exp(-(0:9) * .05)), (model) -> nothing, mcperlife)
-    soln = solution(prob, () -> repmat([.25], 10), 100)
-    push!(df, [mcperlife; soln])
+    prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(m[:Bellmano, :utility] .* exp(-(0:9) * .05)), (model) -> nothing)
+    minfmean, minfserr, minxmean, minxserr = solution(prob, () -> repmat([.25], 10), mcperlife, 100)
+    push!(df, [mcperlife; minxmean; minxserr])
+    println(df)
+end
+
+writetable("attempts-nonstoch.csv", df)
+
+for mcperlife in 15:20:100
+    println(mcperlife)
+    prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(m[:Bellmano, :utility] .* exp(-(0:9) * .05)), (model) -> nothing)
+    minfmean, minfserr, minxmean, minxserr = solution(prob, () -> repmat([.25], 10), mcperlife, 100)
+    push!(df, [mcperlife; minxmean; minxserr])
     println(df)
 end
 

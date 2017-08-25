@@ -77,7 +77,7 @@ push!(df, [Inf; reverse(consumption_reverse)[1:10]])
 
 for mcperlife in 1:5:40
     println(mcperlife)
-    prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(sqrt(m[:Bellmano, :utility]) .* exp(-(0:9) * .05)) + m[:Bellmano, :bonus] * exp(-10 * .05), (model) -> nothing, mcperlife)
+    prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(m[:Bellmano, :utility] .* exp(-(0:9) * .05)) + m[:Bellmano, :bonus] * exp(-10 * .05), (model) -> nothing, mcperlife)
     soln = solution(prob)
     push!(df, [mcperlife; soln])
     println(df)
@@ -87,7 +87,7 @@ writetable("attempts.csv", df)
 
 for mcperlife in 50:10:100
     println(mcperlife)
-    prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(sqrt(m[:Bellmano, :utility]) .* exp(-(0:9) * .05)) + m[:Bellmano, :bonus] * exp(-10 * .05), (model) -> nothing, mcperlife)
+    prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(m[:Bellmano, :utility] .* exp(-(0:9) * .05)) + m[:Bellmano, :bonus] * exp(-10 * .05), (model) -> nothing, mcperlife)
     soln = solution(prob)
     push!(df, [mcperlife; soln])
     println(df)
@@ -97,7 +97,7 @@ writetable("attempts.csv", df)
 
 for mcperlife in 120:20:200
     println(mcperlife)
-    prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(sqrt(m[:Bellmano, :utility]) .* exp(-(0:9) * .05)) + m[:Bellmano, :bonus] * exp(-10 * .05), (model) -> nothing, mcperlife)
+    prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(m[:Bellmano, :utility] .* exp(-(0:9) * .05)) + m[:Bellmano, :bonus] * exp(-10 * .05), (model) -> nothing, mcperlife)
     soln = solution(prob)
     push!(df, [mcperlife; soln])
     println(df)
