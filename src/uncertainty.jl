@@ -141,11 +141,7 @@ end
 
 """Solve an optimization over Monte Carlo uncertainty."""
 function solution(optprob::UncertainOptimizationProblem, generator::Function, algorithm::Symbol, mcperlife::Int64, samples::Int64)
-    sampleseed = 0
-
     function sample_objective(parameters::Vector{Float64})
-        srand(sampleseed)
-
         total = 0
         for iter in 1:mcperlife
             optprob.montecarlo(optprob.model)
@@ -156,8 +152,18 @@ function solution(optprob::UncertainOptimizationProblem, generator::Function, al
     end
 
     if algorithm == :social
-        MimiGA.prepare(optprob.lowers, optprob.uppers, sample_objective)
-        gamodel = runga(MimiGA; initial_pop_size=samples)
+        function iter_objective(parameters::Vector{Float64})
+            total = 0
+            for iter in 1:samples
+                total += sample_objective(parameters)
+            end
+
+            total / mcperlife
+        end
+
+        MimiGA.prepare(optprob.lowers, optprob.uppers, iter_objective)
+
+        gamodel = runga(MimiGA; initial_pop_size=10)
 
         # get the latest population when the GA exited
         population = GeneticAlgorithms.population(gamodel)
@@ -169,7 +175,7 @@ function solution(optprob::UncertainOptimizationProblem, generator::Function, al
         extra = population
 
     elseif algorithm == :biological
-        res = bboptimize(p -> -sample_objective(p); SearchRange=collect(zip(optprob.lowers, optprob.uppers)), MaxFuncEvals=samples)
+        res = bboptimize(p -> -sample_objective(p); SearchRange=collect(zip(optprob.lowers, optprob.uppers)), MaxFuncEvals=samples, Method=:separable_nes)
 
         fmean = NaN
         fserr = NaN
@@ -181,7 +187,14 @@ function solution(optprob::UncertainOptimizationProblem, generator::Function, al
         lower_bounds!(opt, optprob.lowers)
         upper_bounds!(opt, optprob.uppers)
         xtol_rel!(opt, minimum(1e-6 * (optprob.uppers - optprob.lowers)))
-        max_objective!(opt, (p, g) -> sample_objective(p))
+
+        sampleseed = 0
+        function hold_objective(parameters::Vector{Float64}, grad::Vector{Float64})
+            srand(sampleseed)
+            sample_objective(parameters)
+        end
+
+        max_objective!(opt, hold_objective)
 
         sampleprob = OptimizationProblem(optprob.model, optprob.components, optprob.names, opt, Function[])
 
@@ -189,7 +202,7 @@ function solution(optprob::UncertainOptimizationProblem, generator::Function, al
 
         for sample in 1:samples
             sampleseed = sample
-            
+
             minf, minx = solution(sampleprob, generator, maxiter=10000)
             push!(allparams, Float64[minf; minx])
         end

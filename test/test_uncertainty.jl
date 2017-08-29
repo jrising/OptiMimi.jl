@@ -72,43 +72,35 @@ m[:Bellmano, :utility]
 import OptiMimi.uncertainproblem
 using DataFrames
 
-df = DataFrame(mcperlife=[], cons1=[], cons2=[], cons3=[], cons4=[], cons5=[], cons6=[], cons7=[], cons8=[], cons9=[], cons10=[])
-push!(df, [Inf; reverse(consumption_reverse)[1:10]])
+df = DataFrame(algorithm=[], mcperlife=[], cons1=[], cons2=[], cons3=[], cons4=[], cons5=[], cons6=[], cons7=[], cons8=[], cons9=[], cons10=[], cons1serr=[], cons2serr=[], cons3serr=[], cons4serr=[], cons5serr=[], cons6serr=[], cons7serr=[], cons8serr=[], cons9serr=[], cons10serr=[], time=[])
+push!(df, [:exact; Inf; reverse(consumption_reverse)[1:10]; repmat([0], 10); 0])
 
-for mcperlife in 1:5:40
-    println(mcperlife)
-    prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(m[:Bellmano, :utility] .* exp(-(0:9) * .05)) + m[:Bellmano, :bonus] * exp(-10 * .05), (model) -> nothing, mcperlife)
-    soln = solution(prob)
-    push!(df, [mcperlife; soln])
-    println(df)
+for samplemult in [1, 2, 4]
+    for mcperlife in [5, 20, 50]
+        println(mcperlife)
+
+        prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(m[:Bellmano, :utility] .* exp(-(0:9) * .05)) + m[:Bellmano, :bonus] * exp(-10 * .05), (model) -> nothing)
+
+        tic()
+        soln = solution(prob, () -> repmat([.25], 10), :social, mcperlife, samplemult)
+        time = toc()
+        push!(df, [:social; mcperlife; soln.xmean; soln.xserr; time])
+
+        println(df)
+
+        tic()
+        soln = solution(prob, () -> repmat([.25], 10), :biological, mcperlife, 110000*samplemult)
+        time = toc()
+        push!(df, [:biological; mcperlife; soln.xmean; soln.xserr; time])
+
+        println(df)
+
+        tic()
+        soln = solution(prob, () -> repmat([.25], 10), :sampled, mcperlife, 300*samplemult)
+        time = toc()
+        push!(df, [:sampled; mcperlife; soln.xmean; soln.xserr; time])
+
+        println(df)
+    end
+    writetable("attempts-compare.csv", df)
 end
-
-writetable("attempts.csv", df)
-
-for mcperlife in 50:10:100
-    println(mcperlife)
-    prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(m[:Bellmano, :utility] .* exp(-(0:9) * .05)) + m[:Bellmano, :bonus] * exp(-10 * .05), (model) -> nothing, mcperlife)
-    soln = solution(prob)
-    push!(df, [mcperlife; soln])
-    println(df)
-end
-
-writetable("attempts.csv", df)
-
-for mcperlife in 120:20:200
-    println(mcperlife)
-    prob = uncertainproblem(m, [:Bellmano], [:consumption], [0.], [1.], m -> sum(m[:Bellmano, :utility] .* exp(-(0:9) * .05)) + m[:Bellmano, :bonus] * exp(-10 * .05), (model) -> nothing, mcperlife)
-    soln = solution(prob)
-    push!(df, [mcperlife; soln])
-    println(df)
-end
-
-writetable("attempts.csv", df)
-
-using MultivariateStats
-
-llsq(convert(Matrix{Float64}, [ones(nrow(df)-1) log(convert(Vector{Float64}, df[:mcperlife][2:end]))]), convert(Vector{Float64}, df[:cons1][2:end]); bias=false)
-
-finite = df[:cons1] .> df[1, :cons1]
-
-llsq(convert(Matrix{Float64}, [ones(sum(finite)) convert(Vector{Float64}, df[:mcperlife][finite])]), convert(Vector{Float64}, log(df[:cons1][finite] - df[1, :cons1])); bias=false)
