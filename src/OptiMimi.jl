@@ -7,7 +7,7 @@ using Compat
 
 import Mimi: Model
 
-export problem, solution, unaryobjective, objevals, setparameters, nameindexes
+export problem, solution, unaryobjective, objevals, setparameters, nameindexes, uncertainproblem
 
 include("registerdiff.jl")
 include("matrixconstraints.jl")

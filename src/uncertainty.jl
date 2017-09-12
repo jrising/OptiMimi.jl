@@ -132,7 +132,7 @@ type UncertainOptimizationSolution
 end
 
 """Setup an optimization over Monte Carlo uncertainty."""
-function uncertainproblem(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{Float64}, uppers::Vector{Float64}, objective::Function, montecarlo::Function)
+function uncertainproblem(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{Float64}, uppers::Vector{Float64}, objective::Function, montecarlo::Function=(model) -> nothing)
     my_lowers, my_uppers, totalvars = expandlimits(model, components, names, lowers, uppers)
     my_objective = unaryobjective(model, components, names, objective)
 
