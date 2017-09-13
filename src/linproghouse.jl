@@ -7,7 +7,7 @@ import Base.*, Base.-, Base.+, Base.max
 export LinearProgrammingHall, LinearProgrammingShaft, LinearProgrammingRoom, LinearProgrammingHouse
 export hallsingle, hall_relabel, hallvalues
 export shaftsingle, shaftvalues
-export roomdiagonal, roomsingle, roomintersect, room_relabel, room_relabel_parameter
+export roomdiagonal, roomsingle, roomempty, roomintersect, room_relabel, room_relabel_parameter
 export varsum, fromindex
 export setobjective!, setconstraint!, setconstraintoffset!, getconstraintoffset, clearconstraint!, setlower!, setupper!, addparameter!, addconstraint!
 ## Debugging
@@ -205,7 +205,8 @@ end
 """
     roomintersect(model, component, variable1, variable2, gen)
 
-Generate a room at the intersection of two variables.
+Generate a room at the intersection of two variables.  Variable1 is
+the constraint, and variable2 has the optimization parameter.
 
 Call `gen` for each shared index, passing an array to be filled for unshared indexes.
 This version assumes both variables come from the same component.
@@ -236,6 +237,15 @@ function roomintersect(model::Model, component1::Symbol, variable1::Symbol, comp
     dimnames1 = getdimnames(model, component1, variable1)
     dimnames2 = getdimnames(model, component2, variable2)
     LinearProgrammingRoom(component1, variable1, component2, variable2, matrixintersect(dims1, dims2, dimnames1, dimnames2, gen))
+end
+
+"""
+Create a room to be filled in later
+"""
+function roomempty(model::Model, component::Symbol, variable::Symbol, parameter::Symbol)
+    dimsvar = getdims(model, component, variable)
+    dimspar = getdims(model, component, parameter)
+    LinearProgrammingRoom(component, variable, component, parameter, matrixempty(dimsvar, dimspar))
 end
 
 """Connect a gradient to another component: change the variable component and name to another component."""
@@ -288,6 +298,18 @@ function +(room1::LinearProgrammingRoom, room2::LinearProgrammingRoom; skipnamec
         LinearProgrammingRoom(room1.varcomponent, room1.variable, room1.paramcomponent, room1.parameter, spzeros(size(room1.A)...))
     else
         LinearProgrammingRoom(room1.varcomponent, room1.variable, room1.paramcomponent, room1.parameter, room1.A + room2.A)
+    end
+end
+
+function -(room1::LinearProgrammingRoom, room2::LinearProgrammingRoom; skipnamecheck=false)
+    if !skipnamecheck
+        @assert room1.parameter == room2.parameter "Room - Room parameter name mismatch: $(room1.parameter) <> $(room2.parameter); use room_relabel?"
+        @assert room1.variable == room2.variable "Room - Room variable name mismatch: $(room1.variable) <> $(room2.variable); use room_relabel?"
+    end
+    if size(room1.A)[1] == 0 || size(room1.A)[2] == 0
+        LinearProgrammingRoom(room1.varcomponent, room1.variable, room1.paramcomponent, room1.parameter, spzeros(size(room1.A)...))
+    else
+        LinearProgrammingRoom(room1.varcomponent, room1.variable, room1.paramcomponent, room1.parameter, room1.A - room2.A)
     end
 end
 
@@ -585,10 +607,10 @@ function constraining(house::LinearProgrammingHouse, solution::Vector{Float64}; 
                 df[ii0 + ii, :component] = house.paramcomps[kk]
                 df[ii0 + ii, :parameter] = house.parameters[kk]
 
-                newconst = baseconsts + house.A[:, ii0 + ii] * 1e-6 + 1e-6
+                newconst = baseconsts + house.A[:, ii0 + ii] * 1e-6 + (house.A[:, ii0 + ii] .> 0) * 1e-6
                 df[ii0 + ii, :abovefail] = join(names[find((newconst .> house.b) & !ignore)], ", ")
 
-                newconst = baseconsts - house.A[:, ii0 + ii] * 1e-6 - 1e-6
+                newconst = baseconsts - house.A[:, ii0 + ii] * 1e-6 - (house.A[:, ii0 + ii] .> 0) * 1e-6
                 df[ii0 + ii, :belowfail] = join(names[find((newconst .> house.b) & !ignore)], ", ")
             end
         end
@@ -902,4 +924,13 @@ function matrixintersect(rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdimn
     end
 
     A
+end
+
+"""
+Create an empty matrix for the given variables
+"""
+function matrixempty(vardims::Vector{Int64}, pardims::Vector{Int64})
+    vardimlen = prod(vardims)
+    pardimlen = prod(pardims)
+    spzeros(vardimlen, pardimlen)
 end
