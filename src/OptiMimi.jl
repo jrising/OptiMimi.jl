@@ -7,7 +7,7 @@ using Compat
 
 import Mimi: Model
 
-export problem, solution, unaryobjective, objevals, setparameters, nameindexes, uncertainproblem
+export problem, solution, unaryobjective, objevals, setparameters, nameindexes, sensitivity, uncertainproblem
 
 include("registerdiff.jl")
 include("matrixconstraints.jl")
@@ -64,6 +64,17 @@ function setparameters(model::Model, components::Vector{Symbol}, names::Vector{S
         end
         startindex += len
     end
+end
+
+function sensitivity(model::Model, component::Symbol, parameter::Symbol, objective::Function, points::Vector{Float64})
+    results = []
+    for point in points
+        setparameters(model, [component], [parameter], [point])
+        run(model)
+        push!(results, objective(model))
+    end
+
+    results
 end
 
 """Generate the form of objective function used by the optimization, taking parameters rather than a model."""
@@ -129,6 +140,7 @@ function make0(model::Model, components::Vector{Symbol}, names::Vector{Symbol})
     initial
 end
 
+"""Expand parameter constraints to full vectors for every numerical parameter."""
 function expandlimits{T<:Real}(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T})
     my_lowers = T[]
     my_uppers = T[]
@@ -146,7 +158,7 @@ end
 
 """Setup an optimization problem."""
 function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}, objective::Function; constraints::Vector{Function}=Function[], algorithm::Symbol=:LN_COBYLA_OR_LD_MMA)
-    my_lowers, my_uppers, totalvars = expandlimits(model, components, names)
+    my_lowers, my_uppers, totalvars = expandlimits(model, components, names, lowers, uppers)
 
     if algorithm == :GUROBI_LINPROG
         # Make no changes to objective!
@@ -239,6 +251,7 @@ function solution(optprob::OptimizationProblem, generator::Function; maxiter=Inf
     if verbose
         println("Optimizing...")
     end
+    maxeval!(optprob.opt, maxiter)
     (minf,minx,ret) = optimize(optprob.opt, initial)
 
     (minf, minx)
@@ -246,17 +259,7 @@ end
 
 """Setup an optimization problem."""
 function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}, objective::Function, objectiveconstraints::Vector{Function}, matrixconstraints::Vector{MatrixConstraintSet})
-    my_lowers = T[]
-    my_uppers = T[]
-
-    ## Replace with eachname
-    totalvars = 0
-    for (ii, len, isscalar) in @task nameindexes(model, components, names)
-        append!(my_lowers, [lowers[ii] for jj in 1:len])
-        append!(my_uppers, [uppers[ii] for jj in 1:len])
-        totalvars += len
-    end
-
+    my_lowers, my_uppers, totalvars = expandlimits(model, components, names, lowers, uppers)
     LinprogOptimizationProblem(model, components, names, objective, objectiveconstraints, matrixconstraints, my_lowers, my_uppers)
 end
 
