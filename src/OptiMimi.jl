@@ -7,7 +7,7 @@ using Compat
 
 import Mimi: Model
 
-export problem, solution, unaryobjective, objevals, setparameters, nameindexes, sensitivity
+export problem, solution, unaryobjective, objevals, setparameters, nameindexes, sensitivity, uncertainproblem
 
 include("registerdiff.jl")
 include("matrixconstraints.jl")
@@ -15,6 +15,7 @@ include("linproghouse.jl")
 include("trunclinproghouse.jl")
 include("makeroom.jl")
 include("metamimi.jl")
+include("uncertainty.jl")
 
 allverbose = false
 objevals = 0
@@ -138,7 +139,6 @@ function make0(model::Model, components::Vector{Symbol}, names::Vector{Symbol})
 
     initial
 end
-
 
 """Expand parameter constraints to full vectors for every numerical parameter."""
 function expandlimits{T<:Real}(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T})

@@ -34,6 +34,7 @@ type LinearProgrammingHall
     f::Vector{Float64}
 end
 
+"Construct a hall, calling gen with each index."
 function hallsingle(model::Model, component::Symbol, name::Symbol, gen::Function)
     LinearProgrammingHall(component, name, vectorsingle(getdims(model, component, name), gen))
 end
@@ -800,7 +801,7 @@ end
 
 ## Matrix methods
 
-"Construct a matrix with the given dimensions, calling gen for each element."
+"Construct a vector of values corresponding to entries in a matrix with the given dimensions, calling gen for each element."
 function vectorsingle(dims::Vector{Int64}, gen)
     f = Vector{Float64}(prod(dims))
     for ii in 1:length(f)
