@@ -920,7 +920,7 @@ function matrixintersect(rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdimn
         bottomii = fromindex([rowdims[1:length(rowdims) - numshared]; index], rowdims)
         leftii = fromindex([ones(Int64, length(coldims) - numshared); index], coldims)
         rightii = fromindex([coldims[1:length(coldims) - numshared]; index], coldims)
-        subA = sub(A, topii:bottomii, leftii:rightii)
+        subA = view(A, topii:bottomii, leftii:rightii)
         gen(subA, index...)
     end
 
