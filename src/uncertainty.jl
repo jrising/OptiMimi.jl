@@ -12,99 +12,101 @@
 
 ##### Social Genetics #####
 
-using GeneticAlgorithms
+# XXX: Disable GA until master is released.
 
-module MimiGA
+# using GeneticAlgorithms
 
-using GeneticAlgorithms
-using Distributions
+# module MimiGA
 
-paramsize = 0
-lowers = Array(Float64, 0)
-uppers = Array(Float64, 0)
-objective = (parameters) -> 0
-iterations = 0
-lifeseed = 0
+# using GeneticAlgorithms
+# using Distributions
 
-function prepare(lows::Vector{Float64}, his::Vector{Float64}, obj::Function)
-    global paramsize, lowers, uppers, objective, iterations
+# paramsize = 0
+# lowers = Array(Float64, 0)
+# uppers = Array(Float64, 0)
+# objective = (parameters) -> 0
+# iterations = 0
+# lifeseed = 0
 
-    paramsize = length(lows)
-    lowers = lows
-    uppers = his
-    objective = obj
-    iterations = 0
-    lifeseed = 1
-end
+# function prepare(lows::Vector{Float64}, his::Vector{Float64}, obj::Function)
+#     global paramsize, lowers, uppers, objective, iterations
 
-type ParameterSet <: Entity
-    parameters::Vector{Float64}
-    fitness
+#     paramsize = length(lows)
+#     lowers = lows
+#     uppers = his
+#     objective = obj
+#     iterations = 0
+#     lifeseed = 1
+# end
 
-    ParameterSet() = new(Array(Float64, paramsize), nothing)
-    ParameterSet(parameters::Vector{Float64}) = new(parameters, nothing)
-end
+# type ParameterSet <: Entity
+#     parameters::Vector{Float64}
+#     fitness
 
-function create_entity(num)
-    # for simplicity sake, we will use uniform values between the bounds
-    ParameterSet(rand(paramsize) .* (uppers - lowers) + lowers)
-end
+#     ParameterSet() = new(Array(Float64, paramsize), nothing)
+#     ParameterSet(parameters::Vector{Float64}) = new(parameters, nothing)
+# end
 
-function fitness(ent)
-    srand(lifeseed)
-    fit = objective(ent.parameters)
-    if ent.fitness != nothing
-        ent.fitness * .9 + fit * .1
-    else
-        fit * .1
-    end
-end
+# function create_entity(num)
+#     # for simplicity sake, we will use uniform values between the bounds
+#     ParameterSet(rand(paramsize) .* (uppers - lowers) + lowers)
+# end
 
-function group_entities(pop)
-    global iterations, lifeseed
+# function fitness(ent)
+#     srand(lifeseed)
+#     fit = objective(ent.parameters)
+#     if ent.fitness != nothing
+#         ent.fitness * .9 + fit * .1
+#     else
+#         fit * .1
+#     end
+# end
 
-    iterations += 1
-    if iterations % 100 == 0
-        println(pop[1])
-	if iterations >= 10000
-	    return
-	end
-    end
+# function group_entities(pop)
+#     global iterations, lifeseed
 
-    lifeseed += 1
+#     iterations += 1
+#     if iterations % 100 == 0
+#         println(pop[1])
+# 	if iterations >= 10000
+# 	    return
+# 	end
+#     end
 
-    # simple naive groupings that pair the best entitiy with every other
-    dist = TriangularDist(1, length(pop)+1, 1)
-    for i in 1:length(pop)
-        produce([floor(Int, rand(dist)), floor(Int, rand(dist))])
-    end
-end
+#     lifeseed += 1
 
-function crossover(group)
-    child = ParameterSet()
+#     # simple naive groupings that pair the best entitiy with every other
+#     dist = TriangularDist(1, length(pop)+1, 1)
+#     for i in 1:length(pop)
+#         produce([floor(Int, rand(dist)), floor(Int, rand(dist))])
+#     end
+# end
 
-    # grab each element from a random parent
-    num_parents = length(group)
-    for i in 1:length(group[1].parameters)
-        parent = (rand(UInt) % num_parents) + 1
-        child.parameters[i] = group[parent].parameters[i]
-    end
+# function crossover(group)
+#     child = ParameterSet()
 
-    child.fitness = (group[1].fitness + group[2].fitness) / 2
+#     # grab each element from a random parent
+#     num_parents = length(group)
+#     for i in 1:length(group[1].parameters)
+#         parent = (rand(UInt) % num_parents) + 1
+#         child.parameters[i] = group[parent].parameters[i]
+#     end
 
-    child
-end
+#     child.fitness = (group[1].fitness + group[2].fitness) / 2
 
-function mutate(ent)
-    rand(Float64) < 0.8 && return
+#     child
+# end
 
-    randii = rand(UInt) % paramsize + 1
-    current = (ent.parameters[randii] - lowers[randii]) / (uppers[randii] - lowers[randii])
-    dist = Beta(current * iterations + 1, (1 - current) * iterations + 1)
-    ent.parameters[randii] = rand(dist) * (uppers[randii] - lowers[randii]) + lowers[randii]
-end
+# function mutate(ent)
+#     rand(Float64) < 0.8 && return
 
-end
+#     randii = rand(UInt) % paramsize + 1
+#     current = (ent.parameters[randii] - lowers[randii]) / (uppers[randii] - lowers[randii])
+#     dist = Beta(current * iterations + 1, (1 - current) * iterations + 1)
+#     ent.parameters[randii] = rand(dist) * (uppers[randii] - lowers[randii]) + lowers[randii]
+# end
+
+# end
 
 ##### Biological Genetics #####
 
@@ -152,27 +154,29 @@ function solution(optprob::UncertainOptimizationProblem, generator::Function, al
     end
 
     if algorithm == :social
-        function iter_objective(parameters::Vector{Float64})
-            total = 0
-            for iter in 1:samples
-                total += sample_objective(parameters)
-            end
+        ## XXX: Until new tag on GeneticAlgorithms
+        
+        # function iter_objective(parameters::Vector{Float64})
+        #     total = 0
+        #     for iter in 1:samples
+        #         total += sample_objective(parameters)
+        #     end
 
-            total / mcperlife
-        end
+        #     total / mcperlife
+        # end
 
-        MimiGA.prepare(optprob.lowers, optprob.uppers, iter_objective)
+        # MimiGA.prepare(optprob.lowers, optprob.uppers, iter_objective)
 
-        gamodel = runga(MimiGA; initial_pop_size=10)
+        # gamodel = runga(MimiGA; initial_pop_size=10)
 
-        # get the latest population when the GA exited
-        population = GeneticAlgorithms.population(gamodel)
+        # # get the latest population when the GA exited
+        # population = GeneticAlgorithms.population(gamodel)
 
-        fmean = mean([entity.fitness for entity in population])
-        fserr = std([entity.fitness for entity in population]) / sqrt(length(population))
-        xmean = vec(mean(hcat([entity.parameters for entity in population]...), 2))
-        xserr = vec(std(hcat([entity.parameters for entity in population]...), 2) / sqrt(length(population)))
-        extra = population
+        # fmean = mean([entity.fitness for entity in population])
+        # fserr = std([entity.fitness for entity in population]) / sqrt(length(population))
+        # xmean = vec(mean(hcat([entity.parameters for entity in population]...), 2))
+        # xserr = vec(std(hcat([entity.parameters for entity in population]...), 2) / sqrt(length(population)))
+        # extra = population
 
     elseif algorithm == :biological
         res = bboptimize(p -> -sample_objective(p); SearchRange=collect(zip(optprob.lowers, optprob.uppers)), MaxFuncEvals=samples, Method=:separable_nes)
