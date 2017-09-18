@@ -5,3 +5,6 @@ ForwardDiff
 MathProgBase
 DataFrames
 Clp
+GeneticAlgorithms
+Distributions
+BlackBoxOptim
