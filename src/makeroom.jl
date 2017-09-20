@@ -3,7 +3,7 @@ export grad_component
 
 function grad_component(m::Model, component::Symbol, variable::Symbol, parameter::Symbol)
     fdf = unaryobjective(m, [component], [parameter], m -> vec(m[component, variable]))
-    A = ForwardDiff.jacobian(fdf, convert(Vector{Float64}, vec(m.parameters[parameter].values)))
+    A = ForwardDiff.jacobian(fdf, convert(Vector{Float64}, vec(m.external_parameters[parameter].values)))
     LinearProgrammingRoom(component, variable, component, parameter, sparse(A))
 end
 
