@@ -251,7 +251,9 @@ function solution(optprob::OptimizationProblem, generator::Function; maxiter=Inf
     if verbose
         println("Optimizing...")
     end
-    maxeval!(optprob.opt, maxiter)
+    if maxiter < Inf
+        maxeval!(optprob.opt, maxiter)
+    end
     (minf,minx,ret) = optimize(optprob.opt, initial)
 
     (minf, minx)
