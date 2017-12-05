@@ -28,6 +28,16 @@ type OptimizationProblem
     constraints::Vector{Function}
 end
 
+type BlackBoxOptimizationProblem{T}
+    algorithm::Symbol
+    model::Model
+    components::Vector{Symbol}
+    names::Vector{Symbol}
+    objective::Function
+    lowers::Vector{T}
+    uppers::Vector{T}
+end
+
 type LinprogOptimizationProblem{T}
     model::Model
     components::Vector{Symbol}
@@ -38,6 +48,8 @@ type LinprogOptimizationProblem{T}
     exlowers::Vector{T}
     exuppers::Vector{T}
 end
+
+BlackBoxAlgorithms = [:separable_nes, :xnes, :dxnes]
 
 """Returns (ii, len, isscalar) with the index of each symbol and its length."""
 function nameindexes(model::Model, components::Vector{Symbol}, names::Vector{Symbol})
@@ -187,25 +199,33 @@ function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vecto
     if algorithm == :GUROBI_LINPROG
         LinprogOptimizationProblem(model, components, names, objective, constraints, MatrixConstraintSet[], my_lowers, my_uppers)
     else
-        opt = Opt(algorithm, totalvars)
-        lower_bounds!(opt, my_lowers)
-        upper_bounds!(opt, my_uppers)
-        xtol_rel!(opt, minimum(1e-6 * (uppers - lowers)))
-
-        max_objective!(opt, myobjective)
-
-        for constraint in constraints
-            let this_constraint = constraint
-                function my_constraint(xx::Vector, grad::Vector)
-                    setparameters(model, components, names, xx)
-                    this_constraint(model)
-                end
-
-                inequality_constraint!(opt, my_constraint)
+        if algorithm in BlackBoxAlgorithms
+            if length(constraints) > 0
+                warn("Functional constraints not supported for BBO algorithms.")
             end
-        end
 
-        OptimizationProblem(model, components, names, opt, constraints)
+            BlackBoxOptimizationProblem(algorithm, model, components, names, myobjective, my_lowers, my_uppers)
+        else
+            opt = Opt(algorithm, totalvars)
+            lower_bounds!(opt, my_lowers)
+            upper_bounds!(opt, my_uppers)
+            xtol_rel!(opt, minimum(1e-6 * (uppers - lowers)))
+
+            max_objective!(opt, myobjective)
+
+            for constraint in constraints
+                let this_constraint = constraint
+                    function my_constraint(xx::Vector, grad::Vector)
+                        setparameters(model, components, names, xx)
+                        this_constraint(model)
+                    end
+
+                    inequality_constraint!(opt, my_constraint)
+                end
+            end
+
+            OptimizationProblem(model, components, names, opt, constraints)
+        end
     end
 end
 
@@ -258,6 +278,20 @@ function solution(optprob::OptimizationProblem, generator::Function; maxiter=Inf
 
     (minf, minx)
 end
+
+"""Solve an optimization problem."""
+function solution(optprob::BlackBoxOptimizationProblem; maxiter=Inf, verbose=false)
+    global allverbose
+    allverbose = verbose
+
+    if verbose
+        println("Optimizing...")
+    end
+    res = bboptimize(p -> -optprob.objective(p, 0 .* p); SearchRange=collect(zip(optprob.lowers, optprob.uppers)), Method=optprob.algorithm)
+
+    (best_fitness(res), best_candidate(res))
+end
+
 
 """Setup an optimization problem."""
 function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}, objective::Function, objectiveconstraints::Vector{Function}, matrixconstraints::Vector{MatrixConstraintSet})
