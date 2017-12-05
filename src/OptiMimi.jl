@@ -209,7 +209,7 @@ function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vecto
             opt = Opt(algorithm, totalvars)
             lower_bounds!(opt, my_lowers)
             upper_bounds!(opt, my_uppers)
-            xtol_rel!(opt, minimum(1e-6 * (uppers - lowers)))
+            xtol_rel!(opt, 1e-6)
 
             max_objective!(opt, myobjective)
 
