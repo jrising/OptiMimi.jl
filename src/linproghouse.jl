@@ -1092,8 +1092,8 @@ function matrixintersect(rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdimn
 
     for kk in 1:length(iis)
         ## order is vec([(slow, fast) for fast in 1:N, slow in 1:M])
-        rowduped = vec([(rowoo - 1) * nrows * rowdupinner, + (iis[kk] - 1) * rowdupinner + rowii for rowii in 1:rowdupinner, rowoo in 1:rowdupouter])
-        colduped = vec([(coloo - 1) * ncols * coldupinner, + (jjs[kk] - 1) * coldupinner + colii for colii in 1:coldupinner, coloo in 1:coldupouter])
+        rowduped = vec([(rowoo - 1) * nrows * rowdupinner + (iis[kk] - 1) * rowdupinner + rowii for rowii in 1:rowdupinner, rowoo in 1:rowdupouter])
+        colduped = vec([(coloo - 1) * ncols * coldupinner + (jjs[kk] - 1) * coldupinner + colii for colii in 1:coldupinner, coloo in 1:coldupouter])
         alliis[(kk - 1) * kkdupnum + (1:kkdupnum)] = repeat(rowduped, outer=[coldupouter*coldupinner])
         alljjs[(kk - 1) * kkdupnum + (1:kkdupnum)] = repeat(colduped, inner=[rowdupouter*rowdupinner])
     end
