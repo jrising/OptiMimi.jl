@@ -33,7 +33,8 @@ type LinearProgrammingHall
     f::Vector{Float64}
 end
 
-function hallsingle(model::Model, component::Symbol, name::Symbol, gen::Function; dupover::Vector{Symbol}=Symbol[])
+function hallsingle(model::Model, component::Symbol, name::Symbol, gen::Function, dupover::Vector{Symbol}=Symbol[])
+    #println("$(now()) hs $component:$name")
     if isempty(dupover)
         LinearProgrammingHall(component, name, vectorsingle(getdims(model, component, name), gen))
     else
@@ -43,6 +44,7 @@ function hallsingle(model::Model, component::Symbol, name::Symbol, gen::Function
 end
 
 function hallvalues(model::Model, component::Symbol, name::Symbol, values::Array{Float64})
+    #println("$(now()) hv $component:$name")
     gen(inds...) = values[inds...]
     hallsingle(model, component, name, gen)
 end
@@ -120,7 +122,8 @@ type LinearProgrammingShaft
     x::Vector{Float64}
 end
 
-function shaftsingle(model::Model, component::Symbol, name::Symbol, gen::Function; dupover::Vector{Symbol}=Symbol[])
+function shaftsingle(model::Model, component::Symbol, name::Symbol, gen::Function, dupover::Vector{Symbol}=Symbol[])
+    #println("$(now()) ss $component:$name")
     if isempty(dupover)
         LinearProgrammingShaft(component, name, vectorsingle(getdims(model, component, name), gen))
     else
@@ -130,6 +133,7 @@ function shaftsingle(model::Model, component::Symbol, name::Symbol, gen::Functio
 end
 
 function shaftvalues(model::Model, component::Symbol, name::Symbol, values::Array{Float64})
+    #println("$(now()) sv $component:$name")
     gen(inds...) = values[inds...]
     shaftsingle(model, component, name, gen)
 end
@@ -195,7 +199,8 @@ $$\begin{array}{c}
 * `parameter::Symbol`: The optimization parameter, corresponding to matrix columns.
 * `gen::Function`: The function generating gradient values.
 """
-function roomdiagonal(model::Model, component::Symbol, variable::Symbol, parameter::Symbol, gen::Function; dupover::Vector{Symbol}=Symbol[])
+function roomdiagonal(model::Model, component::Symbol, variable::Symbol, parameter::Symbol, gen::Function, dupover::Vector{Symbol}=Symbol[])
+    #println("$(now()) rd $component:$variable x $parameter")
     dimsvar = getdims(model, component, variable)
     dimspar = getdims(model, component, parameter)
     @assert dimsvar == dimspar "Variable and parameter in roomdiagonal do not have the same dimensions: $dimsvar <> $dimspar"
@@ -208,10 +213,20 @@ function roomdiagonal(model::Model, component::Symbol, variable::Symbol, paramet
     end
 end
 
+function roomdiagonal(model::Model, component::Symbol, variable::Symbol, parameter::Symbol, constant::Float64)
+    #println("$(now()) rd $component:$variable x $parameter")
+    dimsvar = getdims(model, component, variable)
+    dimspar = getdims(model, component, parameter)
+    @assert dimsvar == dimspar "Variable and parameter in roomdiagonal do not have the same dimensions: $dimsvar <> $dimspar"
+
+    LinearProgrammingRoom(component, variable, component, parameter, matrixdiagonal(dimsvar, constant))
+end
+
 """
 Fill in every element
 """
-function roomsingle(model::Model, component::Symbol, variable::Symbol, parameter::Symbol, gen::Function; vardupover::Vector{Symbol}=Symbol[], pardupover::Vector{Symbol}=Symbol[])
+function roomsingle(model::Model, component::Symbol, variable::Symbol, parameter::Symbol, gen::Function, vardupover::Vector{Symbol}=Symbol[], pardupover::Vector{Symbol}=Symbol[])
+    #println("$(now()) rs $component:$variable x $parameter")
     dimsvar = getdims(model, component, variable)
     dimspar = getdims(model, component, parameter)
 
@@ -235,7 +250,8 @@ This version assumes both variables come from the same component.
 
 See `matrixintersect` for the matrix generation logic.
 """
-function roomintersect(model::Model, component::Symbol, variable1::Symbol, variable2::Symbol, gen::Function; dupover1::Vector{Symbol}=Symbol[], dupover2::Vector{Symbol}=Symbol[])
+function roomintersect(model::Model, component::Symbol, variable1::Symbol, variable2::Symbol, gen::Function, dupover1::Vector{Symbol}=Symbol[], dupover2::Vector{Symbol}=Symbol[])
+    #println("$(now()) ri $component:$variable1 x $variable2")
     dims1 = getdims(model, component, variable1)
     dims2 = getdims(model, component, variable2)
     dimnames1 = getdimnames(model, component, variable1)
@@ -260,7 +276,8 @@ This version allows the variables to come from different component.
 
 See `matrixintersect` for the matrix generation logic.
 """
-function roomintersect(model::Model, component1::Symbol, variable1::Symbol, component2::Symbol, variable2::Symbol, gen::Function; dupover1::Vector{Symbol}=Symbol[], dupover2::Vector{Symbol}=Symbol[])
+function roomintersect(model::Model, component1::Symbol, variable1::Symbol, component2::Symbol, variable2::Symbol, gen::Function, dupover1::Vector{Symbol}=Symbol[], dupover2::Vector{Symbol}=Symbol[])
+    #println("$(now()) ri $component1:$variable1 x $component2:$variable2")
     dims1 = getdims(model, component1, variable1)
     dims2 = getdims(model, component2, variable2)
     dimnames1 = getdimnames(model, component1, variable1)
@@ -951,6 +968,11 @@ function matrixdiagonal(dims::Vector{Int64}, gen::Function)
     A
 end
 
+function matrixdiagonal(dims::Vector{Int64}, constant::Float64)
+    dimlen = prod(dims)
+    speye(dimlen, dimlen) * constant
+end
+
 function matrixdiagonal(dims::Vector{Int64}, gen::Function, dupover::Vector{Bool})
     diag = vectorsingle(dims, gen, dupover)
 
@@ -1069,23 +1091,38 @@ function matrixintersect(rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdimn
 end
 
 function matrixintersect(rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdimnames::Vector{Symbol}, coldimnames::Vector{Symbol}, gen::Function, rowdupover::Vector{Bool}, coldupover::Vector{Bool})
-    outers, inners = interpretdupover(rowdupover)
+    # Figure out how many of dupovers are shared
+    rowdupovershared = zeros(Bool, length(rowdupover))
+    coldupovershared = zeros(Bool, length(coldupover))
+    for ii in 0:(min(length(rowdims), length(coldims))-1)
+        if rowdupover[end-ii] && coldupover[end-ii] && rowdimnames[end-ii] == coldimnames[end-ii]
+            rowdupovershared[end-ii] = true
+            coldupovershared[end-ii] = true
+        else
+            break
+        end
+    end
+
+    outers, inners = interpretdupover(rowdupover[!rowdupovershared])
     rowdupouter = prod(rowdims[outers])
     rowdupinner = prod(rowdims[inners])
 
-    outers, inners = interpretdupover(coldupover)
+    outers, inners = interpretdupover(coldupover[!coldupovershared])
     coldupouter = prod(coldims[outers])
     coldupinner = prod(coldims[inners])
 
+    # Generate, without any dups
     A = matrixintersect(rowdims[!rowdupover], coldims[!coldupover], rowdimnames[!rowdupover], coldimnames[!coldupover], gen)
 
+    # Create fully-dupped portion
     iis, jjs, vvs = findnz(A)
 
     kkdupnum = rowdupouter*rowdupinner*coldupouter*coldupinner
+
     allvvs = repeat(vvs, inner=[kkdupnum])
     # Need to fill these next two in
-    alliis = zeros(length(iis) * kkdupnum)
-    alljjs = zeros(length(jjs) * kkdupnum)
+    alliis = zeros(Int64, length(iis) * kkdupnum)
+    alljjs = zeros(Int64, length(jjs) * kkdupnum)
 
     nrows = size(A)[1]
     ncols = size(A)[2]
@@ -1098,7 +1135,22 @@ function matrixintersect(rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdimn
         alljjs[(kk - 1) * kkdupnum + (1:kkdupnum)] = repeat(colduped, inner=[rowdupouter*rowdupinner])
     end
 
-    sparse(alliis, alljjs, allvvs)
+    # Create the shared-dupped portion
+
+    shareddupouter = prod(rowdims[rowdupovershared])
+    rownotshared = prod(rowdims[!rowdupovershared])
+    colnotshared = prod(coldims[!coldupovershared])
+
+    allvvs2 = repeat(allvvs, outer=[shareddupouter])
+    alliis2 = zeros(Int64, length(alliis) * shareddupouter)
+    alljjs2 = zeros(Int64, length(alljjs) * shareddupouter)
+
+    for kk in 1:shareddupouter
+        alliis2[(kk - 1) * length(alliis) + (1:length(alliis))] = (kk - 1) * rownotshared + alliis
+        alljjs2[(kk - 1) * length(alljjs) + (1:length(alljjs))] = (kk - 1) * colnotshared + alljjs
+    end
+
+    sparse(alliis2, alljjs2, allvvs2, prod(rowdims), prod(coldims))
 end
 
 """
