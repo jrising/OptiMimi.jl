@@ -8,7 +8,7 @@ import Base.*, Base.-, Base.+, Base.max
 export LinearProgrammingHall, LinearProgrammingShaft, LinearProgrammingRoom, LinearProgrammingHouse
 export hallsingle, hall_relabel, hallvalues
 export shaftsingle, shaftvalues
-export roomdiagonal, roomsingle, roomempty, roomintersect, room_relabel, room_relabel_parameter
+export roomdiagonal, roomsingle, roomchunks, roomempty, roomintersect, room_relabel, room_relabel_parameter
 export varsum, fromindex
 export setobjective!, setconstraint!, setconstraintoffset!, getconstraintoffset, clearconstraint!, setlower!, setupper!, addparameter!, addconstraint!
 ## Debugging
@@ -41,6 +41,10 @@ function hallsingle(model::Model, component::Symbol, name::Symbol, gen::Function
         dupover2 = Bool[dimname in dupover for dimname in getdimnames(model, component, name)]
         LinearProgrammingHall(component, name, vectorsingle(getdims(model, component, name), gen, dupover2))
     end
+end
+
+function hallsingle(model::Model, component::Symbol, name::Symbol, constant::Float64)
+    LinearProgrammingHall(component, name, vectorsingle(getdims(model, component, name), constant))
 end
 
 function hallvalues(model::Model, component::Symbol, name::Symbol, values::Array{Float64})
@@ -130,6 +134,10 @@ function shaftsingle(model::Model, component::Symbol, name::Symbol, gen::Functio
         dupover2 = Bool[dimname in dupover for dimname in getdimnames(model, component, name)]
         LinearProgrammingShaft(component, name, vectorsingle(getdims(model, component, name), gen, dupover2))
     end
+end
+
+function shaftsingle(model::Model, component::Symbol, name::Symbol, constant::Float64)
+    LinearProgrammingShaft(component, name, vectorsingle(getdims(model, component, name), constant))
 end
 
 function shaftvalues(model::Model, component::Symbol, name::Symbol, values::Array{Float64})
@@ -237,6 +245,33 @@ function roomsingle(model::Model, component::Symbol, variable::Symbol, parameter
         pardupover2 = Bool[dimname in pardupover for dimname in getdimnames(model, component, parameter)]
         LinearProgrammingRoom(component, variable, component, parameter, matrixsingle(dimsvar, dimspar, gen, vardupover2, pardupover2))
     end
+end
+
+"""
+Call with matrices for each combination of chunk variables
+"""
+function roomchunks(model::Model, component::Symbol, variable::Symbol, parameter::Symbol, gen::Function, varchunk::Vector{Symbol}, parchunk::Vector{Symbol})
+    #println("$(now()) rc $component:$variable x $parameter")
+    dimsvar = getdims(model, component, variable)
+    dimspar = getdims(model, component, parameter)
+
+    varchunk2 = 0
+    while varchunk2 < length(dimsvar)
+        if !(dimsvar[end - varchunk2] in varchunk)
+            break
+        end
+        varchunk2 += 1
+    end
+
+    parchunk2 = 0
+    while parchunk2 < length(dimspar)
+        if !(dimspar[end - parchunk2] in parchunk)
+            break
+        end
+        parchunk2 += 1
+    end
+
+    LinearProgrammingRoom(component, variable, component, parameter, matrixchunks(dimsvar, dimspar, gen, varchunk2, parchunk2))
 end
 
 """
@@ -921,6 +956,10 @@ function vectorsingle(dims::Vector{Int64}, gen::Function)
     f
 end
 
+function vectorsingle(dims::Vector{Int64}, constant::Float64)
+    return constant * ones(prod(dims))
+end
+
 function vectorsingle(dims::Vector{Int64}, gen::Function, dupover::Vector{Bool})
     outers, inners = interpretdupover(dupover)
     dupouter = prod(dims[outers])
@@ -1026,6 +1065,34 @@ function matrixsingle(vardims::Vector{Int64}, pardims::Vector{Int64}, gen::Funct
     end
 
     sparse(repeat(A, inner=[vardupinner, pardupinner], outer=[vardupouter, pardupouter]))
+end
+
+"""
+matrixchunks(rowdims, coldims, gen, rowchunks, parchunks)
+Call the `gen` function with all combinations of chunked indices.
+"""
+function matrixchunks(rowdims::Vector{Int64}, coldims::Vector{Int64}, gen::Function, rowchunk::Int64, colchunk::Int64)
+    A = spzeros(prod(rowdims), prod(coldims))
+
+    chunkrowdims = rowdims[end-rowchunk+1:end]
+    chunkrowdimlen = prod(chunkrowdims)
+    chunkcoldims = coldims[end-colchunk+1:end]
+    chunkcoldimlen = prod(chunkcoldims)
+    for ii in 1:chunkrowdimlen
+        rowindex = toindex(ii, chunkrowdims)
+        for jj in 1:chunkcoldimlen
+            colindex = toindex(jj, chunkcoldims)
+
+            topii = fromindex([ones(Int64, length(rowdims) - rowchunk); index], rowdims)
+            bottomii = fromindex([rowdims[1:length(rowdims) - rowchunk]; index], rowdims)
+            leftii = fromindex([ones(Int64, length(coldims) - colchunk); index], coldims)
+            rightii = fromindex([coldims[1:length(coldims) - colchunk]; index], coldims)
+
+            A[topii:bottomii, leftii:rightii] = gen(rowindex..., colindex...)
+        end
+    end
+
+    A
 end
 
 """
