@@ -1,7 +1,7 @@
 julia 0.5
 Mimi
 NLopt
-ForwardDiff
+ForwardDiff 0.2.5
 MathProgBase
 DataFrames
 Clp
