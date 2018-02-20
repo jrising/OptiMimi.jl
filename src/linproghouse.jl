@@ -255,9 +255,12 @@ function roomchunks(model::Model, component::Symbol, variable::Symbol, parameter
     dimsvar = getdims(model, component, variable)
     dimspar = getdims(model, component, parameter)
 
+    dimvarnames = getdimnames(model, component, variable)
+    dimparnames = getdimnames(model, component, parameter)
+
     varchunk2 = 0
     while varchunk2 < length(dimsvar)
-        if !(dimsvar[end - varchunk2] in varchunk)
+        if !(dimvarnames[end - varchunk2] in varchunk)
             break
         end
         varchunk2 += 1
@@ -265,7 +268,7 @@ function roomchunks(model::Model, component::Symbol, variable::Symbol, parameter
 
     parchunk2 = 0
     while parchunk2 < length(dimspar)
-        if !(dimspar[end - parchunk2] in parchunk)
+        if !(dimparnames[end - parchunk2] in parchunk)
             break
         end
         parchunk2 += 1
@@ -1083,10 +1086,10 @@ function matrixchunks(rowdims::Vector{Int64}, coldims::Vector{Int64}, gen::Funct
         for jj in 1:chunkcoldimlen
             colindex = toindex(jj, chunkcoldims)
 
-            topii = fromindex([ones(Int64, length(rowdims) - rowchunk); index], rowdims)
-            bottomii = fromindex([rowdims[1:length(rowdims) - rowchunk]; index], rowdims)
-            leftii = fromindex([ones(Int64, length(coldims) - colchunk); index], coldims)
-            rightii = fromindex([coldims[1:length(coldims) - colchunk]; index], coldims)
+            topii = fromindex([ones(Int64, length(rowdims) - rowchunk); rowindex], rowdims)
+            bottomii = fromindex([rowdims[1:length(rowdims) - rowchunk]; rowindex], rowdims)
+            leftii = fromindex([ones(Int64, length(coldims) - colchunk); colindex], coldims)
+            rightii = fromindex([coldims[1:length(coldims) - colchunk]; colindex], coldims)
 
             A[topii:bottomii, leftii:rightii] = gen(rowindex..., colindex...)
         end
