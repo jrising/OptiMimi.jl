@@ -1,8 +1,17 @@
-# OptiMimi: Mimi wrapper for optimization
+# OptiMimi: Optimization of Mimi models
 
 OptiMimi provides a simplified interface for finding optimal parameter
-values for Mimi models.  The core interface consists of `problem` to
-define the optimization problem, and `solution` to solve it.
+values for Mimi models (https://github.com/anthofflab/Mimi.jl).  The
+core interface consists of `problem` to define the optimization
+problem, and calls to `solution` to solve it.
+
+The package provides two major approaches for performing optimization:
+General and Linear programming.  The General approach allows takes
+full models and applies non-linear optimization techniques to optimize
+parameters within them.  The Linear programming approach allows models
+to define linear operation matrices which represent the computations
+they perform in Mimi's `run_timestep` function.  In addition, OptiMimi
+offers a way to automatically generate these matrices.
 
 OptiMimi supports autodifferentiation using ForwardDiff.  To use it,
 the Model must be created with the optional `autodiffable` set to
@@ -10,10 +19,11 @@ the Model must be created with the optional `autodiffable` set to
 macro, instead of `@defcomp`.  If these are not used, OptiMimi will
 fall back on derivative-free algorithms.
 
-OptiMimi is currently implemented using NLopt, but it is meant to
-provide a general interface for other optimization systems.
+The General approach in OptiMimi can use algorithms in both NLopt and
+BlackBoxOptim.  The Linear programming approach uses any solver
+supported by MathProgBase.
 
-## Constructing an optimization problem
+## Constructing an optimization problem (General approach)
 
 Setup an optimization problem with the `problem` function:
 ```
@@ -91,3 +101,5 @@ println(maxx)
 ```
 
 Our generator function can only generate a single initial condition: all 0's.
+
+## Constructing an optimization problem (Linear programming approach)
