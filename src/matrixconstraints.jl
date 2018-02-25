@@ -77,7 +77,7 @@ end
 function addnamedcols(A::Matrix{Float64}, model::Model, components::Vector{Symbol}, names::Vector{Symbol}, pluscomponents::Vector{Symbol}, plusnames::Vector{Symbol})
     found = Bool[]
     for ii in 1:length(pluscomponents)
-        found = [found; any((components == pluscomponents[ii]) & (names == plusnames[ii]))]
+        found = [found; any((components == pluscomponents[ii]) .& (names == plusnames[ii]))]
     end
 
     # Add 0's for any unfound

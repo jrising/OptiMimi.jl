@@ -1,5 +1,6 @@
 using MathProgBase
 using DataFrames
+using Clp
 
 import Mimi.metainfo
 import Base.*, Base.-, Base.+, Base.max
@@ -488,7 +489,7 @@ end
 
 function setobjective!(house::LinearProgrammingHouse, hall::LinearProgrammingHall)
     @assert hall.name in house.parameters "$(hall.name) not a known parameter"
-    kk = findfirst((house.paramcomps .== hall.component) & (house.parameters .== hall.name))
+    kk = findfirst((house.paramcomps .== hall.component) .& (house.parameters .== hall.name))
     paramspans = varlengths(house.model, house.paramcomps, house.parameters)
     @assert length(hall.f) == paramspans[kk] "Length of parameter $(hall.name) unexpected: $(length(hall.f)) <> $(paramspans[kk])"
     before = sum(paramspans[1:kk-1])
@@ -499,9 +500,9 @@ function setobjective!(house::LinearProgrammingHouse, hall::LinearProgrammingHal
 end
 
 function setconstraint!(house::LinearProgrammingHouse, room::LinearProgrammingRoom)
-    kk = findfirst((house.paramcomps .== room.paramcomponent) & (house.parameters .== room.parameter))
+    kk = findfirst((house.paramcomps .== room.paramcomponent) .& (house.parameters .== room.parameter))
     @assert kk > 0 "$(room.paramcomponent).$(room.parameter) not a known parameter"
-    ll = findfirst((house.constcomps .== room.varcomponent) & (house.constraints .== room.variable))
+    ll = findfirst((house.constcomps .== room.varcomponent) .& (house.constraints .== room.variable))
     @assert ll > 0 "$(room.varcomponent).$(room.variable) not a known variable"
 
     paramspans = varlengths(house.model, house.paramcomps, house.parameters)
@@ -525,11 +526,11 @@ function getroom(house::LinearProgrammingHouse, varcomponent::Symbol, variable::
 
     # Determine where to index into vector
     constspans = varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)
-    rowkk = findfirst((house.constcomps .== varcomponent) & (house.constraints .== variable))
+    rowkk = findfirst((house.constcomps .== varcomponent) .& (house.constraints .== variable))
     rowbefore = sum(constspans[1:rowkk-1])
 
     paramspans = varlengths(house.model, house.paramcomps, house.parameters)
-    colkk = findfirst((house.paramcomps .== paramcomponent) & (house.parameters .== parameter))
+    colkk = findfirst((house.paramcomps .== paramcomponent) .& (house.parameters .== parameter))
     colbefore = sum(paramspans[1:colkk-1])
 
     # Collect the offset
@@ -575,7 +576,7 @@ Set offset values within a `LinearProgrammingHouse`.
 """
 function setconstraintoffset!(house::LinearProgrammingHouse, component::Symbol, variable::Symbol, f::Vector{Float64})
     @assert variable in house.constraints "$(variable) not a known variable"
-    kk = findfirst((house.constcomps .== component) & (house.constraints .== variable))
+    kk = findfirst((house.constcomps .== component) .& (house.constraints .== variable))
     constspans = varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)
     @assert length(f) == constspans[kk] "Length of parameter $(variable) unexpected: $(length(f)) <> $(constspans[kk])"
     before = sum(constspans[1:kk-1])
@@ -601,7 +602,7 @@ function getconstraintoffset(house::LinearProgrammingHouse, component::Symbol, v
 
     # Determine where to index into vector
     constspans = varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)
-    kk = findfirst((house.constcomps .== component) & (house.constraints .== variable))
+    kk = findfirst((house.constcomps .== component) .& (house.constraints .== variable))
     before = sum(constspans[1:kk-1])
 
     # Collect the offset
@@ -618,7 +619,7 @@ end
 function clearconstraint!(house::LinearProgrammingHouse, component::Symbol, variable::Symbol)
     @assert variable in house.constraints "$(variable) not a known variable"
 
-    ll = findfirst((house.constcomps .== component) & (house.constraints .== variable))
+    ll = findfirst((house.constcomps .== component) .& (house.constraints .== variable))
     constspans = varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)
 
     constbefore = sum(constspans[1:ll-1])
@@ -629,7 +630,7 @@ end
 
 function setlower!(house::LinearProgrammingHouse, hall::LinearProgrammingHall)
     @assert hall.name in house.parameters "$(hall.name) not a known parameter"
-    kk = findfirst((house.paramcomps .== hall.component) & (house.parameters .== hall.name))
+    kk = findfirst((house.paramcomps .== hall.component) .& (house.parameters .== hall.name))
     paramspans = varlengths(house.model, house.paramcomps, house.parameters)
     @assert length(hall.f) == paramspans[kk] "Length of parameter $(hall.name) unexpected: $(length(hall.f)) <> $(paramspans[kk])"
     before = sum(paramspans[1:kk-1])
@@ -641,7 +642,7 @@ end
 
 function setupper!(house::LinearProgrammingHouse, hall::LinearProgrammingHall)
     @assert hall.name in house.parameters "$(hall.name) not a known parameter"
-    kk = findfirst((house.paramcomps .== hall.component) & (house.parameters .== hall.name))
+    kk = findfirst((house.paramcomps .== hall.component) .& (house.parameters .== hall.name))
     paramspans = varlengths(house.model, house.paramcomps, house.parameters)
     @assert length(hall.f) == paramspans[kk] "Length of parameter $(hall.name) unexpected: $(length(hall.f)) <> $(paramspans[kk])"
     before = sum(paramspans[1:kk-1])
@@ -701,10 +702,10 @@ function constraining(house::LinearProgrammingHouse, solution::Vector{Float64}; 
                 df[ii0 + ii, :parameter] = house.parameters[kk]
 
                 newconst = baseconsts + house.A[:, ii0 + ii] * 1e-6 + (house.A[:, ii0 + ii] .> 0) * 1e-6
-                df[ii0 + ii, :abovefail] = join(names[find((newconst .> house.b) & !ignore)], ", ")
+                df[ii0 + ii, :abovefail] = join(names[find((newconst .> house.b) .& !ignore)], ", ")
 
                 newconst = baseconsts - house.A[:, ii0 + ii] * 1e-6 - (house.A[:, ii0 + ii] .> 0) * 1e-6
-                df[ii0 + ii, :belowfail] = join(names[find((newconst .> house.b) & !ignore)], ", ")
+                df[ii0 + ii, :belowfail] = join(names[find((newconst .> house.b) .& !ignore)], ", ")
             end
         end
     else
@@ -712,17 +713,17 @@ function constraining(house::LinearProgrammingHouse, solution::Vector{Float64}; 
             println(ii / length(subset))
 
             newconst = baseconsts + house.A[:, subset[ii]] * 1e-6 + 1e-6
-            df[ii, :abovefail] = join(names[find((newconst .> house.b) & !ignore)], ", ")
+            df[ii, :abovefail] = join(names[find((newconst .> house.b) .& !ignore)], ", ")
 
             newconst = baseconsts - house.A[:, subset[ii]] * 1e-6 - 1e-6
-            df[ii, :belowfail] = join(names[find((newconst .> house.b) & !ignore)], ", ")
+            df[ii, :belowfail] = join(names[find((newconst .> house.b) .& !ignore)], ", ")
         end
     end
 
     df
 end
 
-houseoptimize(house::LinearProgrammingHouse) = linprog(-house.f, house.A, '<', house.b, house.lowers, house.uppers)
+houseoptimize(house::LinearProgrammingHouse) = linprog(-house.f, house.A, '<', house.b, house.lowers, house.uppers, ClpSolver())
 houseoptimize(house::LinearProgrammingHouse, solver) = linprog(-house.f, house.A, '<', house.b, house.lowers, house.uppers, solver)
 houseoptimize(house::LinearProgrammingHouse, solver, subset::Vector{Int64}) = linprog(-house.f, house.A[subset, :], '<', house.b[subset], house.lowers, house.uppers, solver)
 
@@ -956,9 +957,9 @@ function vectorsingle(dims::Vector{Int64}, gen::Function, dupover::Vector{Bool})
     dupouter = prod(dims[outers])
     dupinner = prod(dims[inners])
 
-    f = Vector{Float64}(prod(dims[!dupover]))
+    f = Vector{Float64}(prod(dims[.!dupover]))
     for ii in 1:length(f)
-        f[ii] = gen(toindex(ii, dims[!dupover])...)
+        f[ii] = gen(toindex(ii, dims[.!dupover])...)
     end
 
     repeat(f, inner=[dupinner], outer=[dupouter])
@@ -1046,12 +1047,12 @@ function matrixsingle(vardims::Vector{Int64}, pardims::Vector{Int64}, gen::Funct
     pardupouter = prod(pardims[outers])
     pardupinner = prod(pardims[inners])
 
-    vardimlen = prod(vardims[!vardupover])
-    pardimlen = prod(pardims[!pardupover])
+    vardimlen = prod(vardims[.!vardupover])
+    pardimlen = prod(pardims[.!pardupover])
     A = zeros(vardimlen, pardimlen) # Not sparse
     for ii in 1:vardimlen
         for jj in 1:pardimlen
-            A[ii, jj] = gen(toindex(ii, vardims[!vardupover])..., toindex(jj, pardims[!pardupover])...)
+            A[ii, jj] = gen(toindex(ii, vardims[.!vardupover])..., toindex(jj, pardims[.!pardupover])...)
         end
     end
 
@@ -1161,16 +1162,16 @@ function matrixintersect(rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdimn
         end
     end
 
-    outers, inners = interpretdupover(rowdupover[!rowdupovershared])
+    outers, inners = interpretdupover(rowdupover[.!rowdupovershared])
     rowdupouter = prod(rowdims[outers])
     rowdupinner = prod(rowdims[inners])
 
-    outers, inners = interpretdupover(coldupover[!coldupovershared])
+    outers, inners = interpretdupover(coldupover[.!coldupovershared])
     coldupouter = prod(coldims[outers])
     coldupinner = prod(coldims[inners])
 
     # Generate, without any dups
-    A = matrixintersect(rowdims[!rowdupover], coldims[!coldupover], rowdimnames[!rowdupover], coldimnames[!coldupover], gen)
+    A = matrixintersect(rowdims[.!rowdupover], coldims[.!coldupover], rowdimnames[.!rowdupover], coldimnames[.!coldupover], gen)
 
     # Create fully-dupped portion
     iis, jjs, vvs = findnz(A)
@@ -1196,8 +1197,8 @@ function matrixintersect(rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdimn
     # Create the shared-dupped portion
 
     shareddupouter = prod(rowdims[rowdupovershared])
-    rownotshared = prod(rowdims[!rowdupovershared])
-    colnotshared = prod(coldims[!coldupovershared])
+    rownotshared = prod(rowdims[.!rowdupovershared])
+    colnotshared = prod(coldims[.!coldupovershared])
 
     allvvs2 = repeat(allvvs, outer=[shareddupouter])
     alliis2 = zeros(Int64, length(alliis) * shareddupouter)
