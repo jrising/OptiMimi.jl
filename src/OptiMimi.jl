@@ -1,7 +1,7 @@
 module OptiMimi
 
 using NLopt
-using ForwardDiff
+using ForwardDiff, DiffBase
 using MathProgBase
 using Compat
 
@@ -120,13 +120,13 @@ end
 function autodiffobjective(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, objective::Function)
     myunaryobjective = unaryobjective(model, components, names, objective)
     function myobjective(xx::Vector, grad::Vector)
-        out = GradientResult(xx)
+        out = DiffBase.GradientResult(xx)
         ForwardDiff.gradient!(out, myunaryobjective, xx)
-        if any(isnan(ForwardDiff.gradient(out)))
+        if any(isnan(DiffBase.gradient(out)))
             error("objective gradient is NaN")
         end
-        copy!(grad, ForwardDiff.gradient(out))
-        ForwardDiff.value(out)
+        copy!(grad, DiffBase.gradient(out))
+        DiffBase.value(out)
     end
 
     myobjective
