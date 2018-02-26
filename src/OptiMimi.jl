@@ -1,7 +1,7 @@
 module OptiMimi
 
 using NLopt
-using ForwardDiff
+using ForwardDiff, DiffResults
 using MathProgBase
 using Compat
 
@@ -51,13 +51,13 @@ end
 BlackBoxAlgorithms = [:separable_nes, :xnes, :dxnes]
 
 """Returns (ii, len, isscalar) with the index of each symbol and its length."""
-function nameindexes(model::Model, components::Vector{Symbol}, names::Vector{Symbol})
+function nameindexes(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, chnl)
     for ii in 1:length(components)
         dims = getdims(model, components[ii], names[ii])
         if length(dims) == 0
-            produce((ii, 1, true)) # It's a scalar
+            put!(chnl, (ii, 1, true)) # It's a scalar
         else
-            produce((ii, prod(dims), false))
+            put!(chnl, (ii, prod(dims), false))
         end
     end
 end
@@ -65,13 +65,13 @@ end
 """Set parameters in a model."""
 function setparameters(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, xx::Vector)
     startindex = 1
-    for (ii, len, isscalar) in @task nameindexes(model, components, names)
+    for (ii, len, isscalar) in Channel((chnl) -> nameindexes(model, components, names, chnl))
         if isscalar
-            setfield!(get(model.mi).components[components[ii]].Parameters, names[ii], xx[startindex])
+            setparameter(model, components[ii], names[ii], xx[startindex])
         else
             shape = getdims(model, components[ii], names[ii])
             reshaped = reshape(collect(model.numberType, xx[startindex:(startindex+len - 1)]), tuple(shape...))
-            setfield!(get(model.mi).components[components[ii]].Parameters, names[ii], reshaped)
+            setparameter(model, components[ii], names[ii], reshaped)
         end
         startindex += len
     end
@@ -120,13 +120,13 @@ end
 function autodiffobjective(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, objective::Function)
     myunaryobjective = unaryobjective(model, components, names, objective)
     function myobjective(xx::Vector, grad::Vector)
-        out = GradientResult(xx)
+        out = DiffResults.GradientResult(xx)
         ForwardDiff.gradient!(out, myunaryobjective, xx)
-        if any(isnan(ForwardDiff.gradient(out)))
+        if any(isnan.(DiffResults.gradient(out)))
             error("objective gradient is NaN")
         end
-        copy!(grad, ForwardDiff.gradient(out))
-        ForwardDiff.value(out)
+        copy!(grad, DiffResults.gradient(out))
+        DiffResults.value(out)
     end
 
     myobjective
@@ -135,7 +135,7 @@ end
 """Create a 0 point."""
 function make0(model::Model, components::Vector{Symbol}, names::Vector{Symbol})
     initial = Float64[]
-    for (ii, len, isscalar) in @task nameindexes(model, components, names)
+    for (ii, len, isscalar) in Channel((chnl) -> nameindexes(model, components, names, chnl))
         append!(initial, [0. for jj in 1:len])
     end
 
@@ -149,7 +149,7 @@ function expandlimits{T<:Real}(model::Model, components::Vector{Symbol}, names::
 
     ## Replace with eachname
     totalvars = 0
-    for (ii, len, isscalar) in @task nameindexes(model, components, names)
+    for (ii, len, isscalar) in Channel((chnl) -> nameindexes(model, components, names, chnl))
         append!(my_lowers, [lowers[ii] for jj in 1:len])
         append!(my_uppers, [uppers[ii] for jj in 1:len])
         totalvars += len

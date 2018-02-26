@@ -15,8 +15,6 @@ export setobjective!, setconstraint!, setconstraintoffset!, getconstraintoffset,
 export getroom, getnonzerorooms
 export gethouse, constraining, houseoptimize, summarizeparameters, findinfeasiblepair, varlengths, getconstraintsolution, getparametersolution
 
-include("metamimi.jl")
-
 # A hallway is a vector of variables
 """
     LinearProgrammingHall
@@ -702,10 +700,10 @@ function constraining(house::LinearProgrammingHouse, solution::Vector{Float64}; 
                 df[ii0 + ii, :parameter] = house.parameters[kk]
 
                 newconst = baseconsts + house.A[:, ii0 + ii] * 1e-6 + (house.A[:, ii0 + ii] .> 0) * 1e-6
-                df[ii0 + ii, :abovefail] = join(names[find((newconst .> house.b) .& !ignore)], ", ")
+                df[ii0 + ii, :abovefail] = join(names[find((newconst .> house.b) .& .!ignore)], ", ")
 
                 newconst = baseconsts - house.A[:, ii0 + ii] * 1e-6 - (house.A[:, ii0 + ii] .> 0) * 1e-6
-                df[ii0 + ii, :belowfail] = join(names[find((newconst .> house.b) .& !ignore)], ", ")
+                df[ii0 + ii, :belowfail] = join(names[find((newconst .> house.b) .& .!ignore)], ", ")
             end
         end
     else

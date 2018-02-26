@@ -70,10 +70,10 @@ setconstraintoffset!(house, constraintoffset_cabinets_space(m))
 @time sol = houseoptimize(house)
 println(sol.sol)
 
-@test_approx_eq sol.sol[1] 8.
-@test_approx_eq sol.sol[2] 8.
-@test_approx_eq sol.sol[3] 3.
-@test_approx_eq sol.sol[4] 3.
+@test sol.sol[1] ≈ 8.0
+@test sol.sol[2] ≈ 8.0
+@test sol.sol[3] ≈ 3.0
+@test sol.sol[4] ≈ 3.0
 
 # 100 cubic feet by buying eight of model X and three of model Y.
 

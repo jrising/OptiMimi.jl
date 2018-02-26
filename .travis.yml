@@ -6,7 +6,6 @@ os:
   - osx
 sudo: required
 julia:
-  - 0.5
   - 0.6
 # uncomment the following lines to override the default test script
 #script:

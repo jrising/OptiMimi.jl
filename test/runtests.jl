@@ -41,9 +41,9 @@ objective1(model::Model) = sum(model[:quad1, :value])
 optprob = problem(model1, [:quad1], [:input], [0.], [100.0], objective1)
 (maxf, maxx) = solution(optprob, () -> [0., 0.])
 
-@test_approx_eq_eps maxf 0 1e-2
-@test_approx_eq_eps maxx[1] 2 1e-2
-@test_approx_eq_eps maxx[2] 10 1e-2
+@test maxf ≈ 0 atol=0.01
+@test maxx[1] ≈ 2 atol=0.01
+@test maxx[2] ≈ 10 atol=0.01
 
 # Automatic differentiation
 
@@ -82,14 +82,14 @@ objective2(model::Model) = sum(model[:quad2, :value])
 uo = unaryobjective(model2, [:quad2], [:input], objective2)
 guo(xx) = ForwardDiff.gradient(uo, xx)
 guos = guo([0., 0.])
-@test_approx_eq_eps guos[1] 4 1e-2
-@test_approx_eq_eps guos[2] 20 1e-2
+@test guos[1] ≈ 4 atol=0.01
+@test guos[2] ≈ 20 atol=0.01
 
 # Optimize
 optprob = problem(model2, [:quad2], [:input], [0.], [100.0], objective2)
 (maxf, maxx) = solution(optprob, () -> [0., 0.])
 
 
-@test_approx_eq_eps maxf 0 1e-2
-@test_approx_eq_eps maxx[1] 2 1e-2
-@test_approx_eq_eps maxx[2] 10 1e-2
+@test maxf ≈ 0 atol=0.01
+@test maxx[1] ≈ 2 atol=0.01
+@test maxx[2] ≈ 10 atol=0.01
