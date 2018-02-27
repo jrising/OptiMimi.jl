@@ -235,6 +235,7 @@ function solution(optprob::OptimizationProblem, generator::Function; maxiter=Inf
         initial = generator()
 
         setparameters(optprob.model, optprob.components, optprob.names, initial)
+        run(optprob.model)
 
         valid = true
         for constraint in optprob.constraints
