@@ -207,6 +207,7 @@ function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vecto
                 let this_constraint = constraint
                     function my_constraint(xx::Vector, grad::Vector)
                         setparameters(model, components, names, xx)
+                        run(model)
                         this_constraint(model)
                     end
 
