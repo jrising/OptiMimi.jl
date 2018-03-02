@@ -957,9 +957,9 @@ function vectorsingle(dims::Vector{Int64}, gen::Function, dupover::Vector{Bool})
     dupouter = prod(dims[outers])
     dupinner = prod(dims[inners])
 
-    f = Vector{Float64}(prod(dims[.!dupover]))
+    f = Vector{Float64}(prod(dims[!dupover]))
     for ii in 1:length(f)
-        f[ii] = gen(toindex(ii, dims[.!dupover])...)
+        f[ii] = gen(toindex(ii, dims[!dupover])...)
     end
 
     repeat(f, inner=[dupinner], outer=[dupouter])
@@ -1047,12 +1047,12 @@ function matrixsingle(vardims::Vector{Int64}, pardims::Vector{Int64}, gen::Funct
     pardupouter = prod(pardims[outers])
     pardupinner = prod(pardims[inners])
 
-    vardimlen = prod(vardims[.!vardupover])
-    pardimlen = prod(pardims[.!pardupover])
+    vardimlen = prod(vardims[!vardupover])
+    pardimlen = prod(pardims[!pardupover])
     A = zeros(vardimlen, pardimlen) # Not sparse
     for ii in 1:vardimlen
         for jj in 1:pardimlen
-            A[ii, jj] = gen(toindex(ii, vardims[.!vardupover])..., toindex(jj, pardims[.!pardupover])...)
+            A[ii, jj] = gen(toindex(ii, vardims[!vardupover])..., toindex(jj, pardims[!pardupover])...)
         end
     end
 
@@ -1162,16 +1162,16 @@ function matrixintersect(rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdimn
         end
     end
 
-    outers, inners = interpretdupover(rowdupover[.!rowdupovershared])
+    outers, inners = interpretdupover(rowdupover[!rowdupovershared])
     rowdupouter = prod(rowdims[outers])
     rowdupinner = prod(rowdims[inners])
 
-    outers, inners = interpretdupover(coldupover[.!coldupovershared])
+    outers, inners = interpretdupover(coldupover[!coldupovershared])
     coldupouter = prod(coldims[outers])
     coldupinner = prod(coldims[inners])
 
     # Generate, without any dups
-    A = matrixintersect(rowdims[.!rowdupover], coldims[.!coldupover], rowdimnames[.!rowdupover], coldimnames[.!coldupover], gen)
+    A = matrixintersect(rowdims[!rowdupover], coldims[!coldupover], rowdimnames[!rowdupover], coldimnames[!coldupover], gen)
 
     # Create fully-dupped portion
     iis, jjs, vvs = findnz(A)
@@ -1197,8 +1197,8 @@ function matrixintersect(rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdimn
     # Create the shared-dupped portion
 
     shareddupouter = prod(rowdims[rowdupovershared])
-    rownotshared = prod(rowdims[.!rowdupovershared])
-    colnotshared = prod(coldims[.!coldupovershared])
+    rownotshared = prod(rowdims[!rowdupovershared])
+    colnotshared = prod(coldims[!coldupovershared])
 
     allvvs2 = repeat(allvvs, outer=[shareddupouter])
     alliis2 = zeros(Int64, length(alliis) * shareddupouter)
