@@ -207,6 +207,7 @@ function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vecto
                 let this_constraint = constraint
                     function my_constraint(xx::Vector, grad::Vector)
                         setparameters(model, components, names, xx)
+                        run(model)
                         this_constraint(model)
                     end
 
@@ -235,6 +236,7 @@ function solution(optprob::OptimizationProblem, generator::Function; maxiter=Inf
         initial = generator()
 
         setparameters(optprob.model, optprob.components, optprob.names, initial)
+        run(model)
 
         valid = true
         for constraint in optprob.constraints
