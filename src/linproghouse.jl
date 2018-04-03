@@ -919,7 +919,7 @@ function interpretdupover(dupover::Vector{Bool})
         end
     end
     if !dupover[ii]
-        return inners, Int64[]
+        return Int64[], inners
     end
 
     # Final trues
@@ -933,7 +933,7 @@ function interpretdupover(dupover::Vector{Bool})
         ii += 1
     end
 
-    return inners, outers
+    return outers, inners
 end
 
 "Construct a vector of values corresponding to entries in a matrix with the given dimensions, calling gen for each element."

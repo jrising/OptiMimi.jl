@@ -18,4 +18,4 @@ simple[:xx] = reshape(repeat([1, 2], outer=3), (2, 3))
 gen(rr) = m.external_parameters[:xx].values[rr, 1]
 hall = hallsingle(m, :Simple, :xx, gen, [:time])
 
-assert reshape(hall.f, (2, 3)) == m.external_parameters[:xx].values
+@test reshape(hall.f, (2, 3)) == m.external_parameters[:xx].values
