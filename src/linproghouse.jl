@@ -897,10 +897,10 @@ function interpretdupover(dupover::Vector{Bool})
     ii = 1
 
     # Initial trues
-    outers = Int64[]
+    inners = Int64[]
     if dupover[1]
         while ii < length(dupover)
-            push!(outers, ii)
+            push!(inners, ii)
             ii += 1
             if !dupover[ii]
                 break
@@ -919,21 +919,21 @@ function interpretdupover(dupover::Vector{Bool})
         end
     end
     if !dupover[ii]
-        return outers, Int64[]
+        return inners, Int64[]
     end
 
     # Final trues
-    inners = Int64[]
+    outers = Int64[]
     while ii <= length(dupover)
         if !dupover[ii]
             error("Cannot support middle dimension duplication.")
         end
 
-        push!(inners, ii)
+        push!(outers, ii)
         ii += 1
     end
 
-    return outers, inners
+    return inners, outers
 end
 
 "Construct a vector of values corresponding to entries in a matrix with the given dimensions, calling gen for each element."
