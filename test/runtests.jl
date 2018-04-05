@@ -95,5 +95,3 @@ optprob = problem(model2, [:quad2], [:input], [0.], [100.0], objective2)
 @test maxx[2] ≈ 10 atol=0.01
 
 include("test_dupover.jl")
-include("test_uncertainty.jl")
-include("test_uncertainty2.jl")
