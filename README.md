@@ -105,6 +105,16 @@ println(maxx)
 
 Our generator function can only generate a single initial condition: all 0's.
 
+Once you have a solution, you can initialize a model with it usnig the
+`setparameters` function:
+
+```
+setparameters(my_model, [:agriculture], [:fertilizer], maxx)
+```
+
+This is most useful when there are multiple parameters being
+optimized, or the parameters have multiple dimensions.
+
 ## Constructing an optimization problem (Linear programming approach)
 
 Linear programming allows for vastly faster optimizations, so long as

@@ -7,7 +7,7 @@ using Compat
 
 import Mimi: Model
 
-export problem, solution, unaryobjective, objevals, setparameters, nameindexes, sensitivity, uncertainproblem
+export problem, solution, unaryobjective, objevals, setparameters, nameindexes, sensitivity, uncertainproblem, setsolution
 
 include("registerdiff.jl")
 include("matrixconstraints.jl")
@@ -62,7 +62,9 @@ function nameindexes(model::Model, components::Vector{Symbol}, names::Vector{Sym
     end
 end
 
-"""Set parameters in a model."""
+"""
+Initialize a model with the results from an optimization.
+"""
 function setparameters(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, xx::Vector)
     startindex = 1
     for (ii, len, isscalar) in Channel((chnl) -> nameindexes(model, components, names, chnl))
