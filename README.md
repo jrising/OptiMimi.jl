@@ -1,5 +1,8 @@
 # OptiMimi: Optimization of Mimi models
 
+[![Build Status](https://travis-ci.org/jrising/OptiMimi.jl.svg?branch=master)](https://travis-ci.org/jrising/OptiMimi.jl)
+[![Code Coverage](https://codecov.io/gh/jrising/OptiMimi.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/jrising/OptiMimi.jl)
+
 OptiMimi provides a simplified interface for finding optimal parameter
 values for Mimi models (https://github.com/anthofflab/Mimi.jl).  The
 core interface consists of `problem` to define the optimization

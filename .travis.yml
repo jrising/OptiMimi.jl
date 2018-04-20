@@ -11,3 +11,5 @@ julia:
 #script:
 #  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
 #  - julia -e 'Pkg.clone(pwd()); Pkg.build("OptiMimi"); Pkg.test("OptiMimi"; coverage=true)'
+after_success:
+  - julia -e 'cd(Pkg.dir("OptiMimi.jl")); Pkg.add("Coverage"); using Coverage; Codecov.submit(Codecov.process_folder())'
