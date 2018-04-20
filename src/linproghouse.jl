@@ -8,7 +8,7 @@ import Base.*, Base.-, Base.+, Base.max
 export LinearProgrammingHall, LinearProgrammingShaft, LinearProgrammingRoom, LinearProgrammingHouse
 export hallsingle, hall_relabel, hallvalues
 export shaftsingle, shaftvalues
-export roomdiagonal, roomsingle, roomchunks, roomempty, roomintersect, room_relabel, room_relabel_parameter
+export roomdiagonal, roomdiagonalintersect, roomsingle, roomchunks, roomempty, roomintersect, room_relabel, room_relabel_parameter
 export varsum, fromindex
 export setobjective!, setconstraint!, setconstraintoffset!, getconstraintoffset, clearconstraint!, setlower!, setupper!, addparameter!, addconstraint!
 ## Debugging
@@ -212,23 +212,54 @@ function roomdiagonal(model::Model, component::Symbol, variable::Symbol, paramet
     #println("$(now()) rd $component:$variable x $parameter")
     dimsvar = getdims(model, component, variable)
     dimspar = getdims(model, component, parameter)
-    @assert dimsvar == dimspar "Variable and parameter in roomdiagonal do not have the same dimensions: $dimsvar <> $dimspar"
 
     if isempty(dupover)
+        @assert dimsvar == dimspar "Variable and parameter in roomdiagonal do not have the same dimensions: $component.$variable $dimsvar <> $component.$parameter $dimspar"
+
         LinearProgrammingRoom(component, variable, component, parameter, matrixdiagonal(dimsvar, gen))
     else
-        dupover2 = Bool[dimname in dupover for dimname in getdimnames(model, component, variable)]
-        LinearProgrammingRoom(component, variable, component, parameter, matrixdiagonal(dimsvar, gen, dupover2))
+        dupoverpar = Bool[dimname in dupover for dimname in getdimnames(model, component, parameter)]
+        dupovervar = Bool[dimname in dupover for dimname in getdimnames(model, component, variable)]
+
+        @assert dimsvar[.!dupovervar] == dimspar[.!dupoverpar] "Variable and parameter in roomdiagonal do not have the same dimensions: $component.$variable $dimsvar <> $component.$parameter $dimspar, after dup-ignore $dupover"
+
+        matrix = matrixdiagonal(dimsvar[.!dupovervar], gen)
+        matrix2 = matrixduplicate(matrix, dimsvar, dimspar, dupovervar, dupoverpar)
+
+        LinearProgrammingRoom(component, variable, component, parameter, matrix2)
     end
 end
 
-function roomdiagonal(model::Model, component::Symbol, variable::Symbol, parameter::Symbol, constant::Float64)
+function roomdiagonal(model::Model, component::Symbol, variable::Symbol, parameter::Symbol, constant::Float64, dupover::Vector{Symbol}=Symbol[])
     #println("$(now()) rd $component:$variable x $parameter")
     dimsvar = getdims(model, component, variable)
     dimspar = getdims(model, component, parameter)
-    @assert dimsvar == dimspar "Variable and parameter in roomdiagonal do not have the same dimensions: $dimsvar <> $dimspar"
 
-    LinearProgrammingRoom(component, variable, component, parameter, matrixdiagonal(dimsvar, constant))
+    if isempty(dupover)
+        @assert dimsvar == dimspar "Variable and parameter in roomdiagonal do not have the same dimensions: $component.$variable $dimsvar <> $component.$parameter $dimspar"
+
+        LinearProgrammingRoom(component, variable, component, parameter, matrixdiagonal(dimsvar, constant))
+    else
+        dupoverpar = Bool[dimname in dupover for dimname in getdimnames(model, component, parameter)]
+        dupovervar = Bool[dimname in dupover for dimname in getdimnames(model, component, variable)]
+
+        @assert dimsvar[.!dupovervar] == dimspar[.!dupoverpar] "Variable and parameter in roomdiagonal do not have the same dimensions: $component.$variable $dimsvar <> $component.$parameter $dimspar, after dup-ignore $dupover"
+
+        matrix = matrixdiagonal(dimsvar[.!dupovervar], constant)
+        matrix2 = matrixduplicate(matrix, dimsvar, dimspar, dupovervar, dupoverpar)
+        LinearProgrammingRoom(component, variable, component, parameter, matrix2)
+    end
+end
+
+function roomdiagonalintersect(model::Model, component::Symbol, variable::Symbol, parameter::Symbol, gen::Function)
+    #println("$(now()) rd $component:$variable x $parameter")
+    dimsvar = getdims(model, component, variable)
+    dimspar = getdims(model, component, parameter)
+    dimnamesvar = getdimnames(model, component, variable)
+    dimnamespar = getdimnames(model, component, parameter)
+
+    A = matrixdiagonalintersect(dimsvar, dimspar, dimnamesvar, dimnamespar, gen)
+    LinearProgrammingRoom(component, variable, component, parameter, A)
 end
 
 """
@@ -851,7 +882,10 @@ function rangeof(m::Model, name, components, names, vardictionary::Dict{Symbol, 
     sum(varlens[1:kk-1])+1:sum(varlens[1:kk])
 end
 
-"Translate an offset value (+1) to an index vector."
+"""
+Translate an offset value (+1) to an index vector.
+This faster if dims is a vector.  Use ind2sub if dims is tuple.
+"""
 function toindex(ii::Int64, dims::Vector{Int64})
     indexes = Vector{Int64}(length(dims))
     offset = ii - 1
@@ -863,7 +897,10 @@ function toindex(ii::Int64, dims::Vector{Int64})
     return indexes
 end
 
-"Translate an index vector to an offset (+1)."
+"""
+Translate an index vector to an offset (+1).
+This seems to be faster irrespective of the tupleness of dims.
+"""
 function fromindex(index::Vector{Int64}, dims::Vector{Int64})
     offset = index[end]
     for ii in length(dims)-1:-1:1
@@ -1016,6 +1053,46 @@ function matrixdiagonal(dims::Vector{Int64}, gen::Function, dupover::Vector{Bool
     A
 end
 
+
+function matrixdiagonalintersect(rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdimnames::Vector{Symbol}, coldimnames::Vector{Symbol}, gen::Function)
+    A = spzeros(prod(rowdims), prod(coldims))
+
+    common = intersect(rowdimnames, coldimnames)
+
+    commonrow = Bool[dimname in common for dimname in rowdimnames]
+    commoncol = Bool[dimname in common for dimname in coldimnames]
+
+    remainrowdims = rowdims[.!commonrow]
+    remaincoldims = coldims[.!commoncol]
+
+    fullrowsub = repmat([0], length(rowdims))
+    fullcolsub = repmat([0], length(coldims))
+
+    A = spzeros(prod(rowdims), prod(coldims))
+    for ii in 1:prod(remainrowdims)
+        for jj in 1:prod(remaincoldims)
+            remainrowsub = toindex(ii, remainrowdims)
+            remaincolsub = toindex(jj, remaincoldims)
+
+            fullrowsub[.!commonrow] = remainrowsub
+            fullcolsub[.!commoncol] = remaincolsub
+
+            for kk in 1:prod(rowdims[commonrow])
+                commonsub = toindex(kk, rowdims[commonrow])
+                fullrowsub[commonrow] = commonsub
+                fullcolsub[commoncol] = commonsub
+
+                fullii = fromindex(fullrowsub, rowdims)
+                fulljj = fromindex(fullcolsub, coldims)
+                A[fullii, fulljj] = gen(fullrowsub..., fullcolsub...)
+            end
+        end
+    end
+
+    A
+end
+
+
 """
     matrixsingle(vardims, pardims, gen)
 
@@ -1160,37 +1237,12 @@ function matrixintersect(rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdimn
         end
     end
 
-    outers, inners = interpretdupover(rowdupover[.!rowdupovershared])
-    rowdupouter = prod(rowdims[outers])
-    rowdupinner = prod(rowdims[inners])
-
-    outers, inners = interpretdupover(coldupover[.!coldupovershared])
-    coldupouter = prod(coldims[outers])
-    coldupinner = prod(coldims[inners])
-
     # Generate, without any dups
     A = matrixintersect(rowdims[.!rowdupover], coldims[.!coldupover], rowdimnames[.!rowdupover], coldimnames[.!coldupover], gen)
 
-    # Create fully-dupped portion
-    iis, jjs, vvs = findnz(A)
+    A2 = matrixduplicate(A, rowdims[.!rowdupovershared], coldims[.!coldupovershared], rowdupover[.!rowdupovershared], coldupover[.!coldupovershared])
 
-    kkdupnum = rowdupouter*rowdupinner*coldupouter*coldupinner
-
-    allvvs = repeat(vvs, inner=[kkdupnum])
-    # Need to fill these next two in
-    alliis = zeros(Int64, length(iis) * kkdupnum)
-    alljjs = zeros(Int64, length(jjs) * kkdupnum)
-
-    nrows = size(A)[1]
-    ncols = size(A)[2]
-
-    for kk in 1:length(iis)
-        ## order is vec([(slow, fast) for fast in 1:N, slow in 1:M])
-        rowduped = vec([(rowoo - 1) * nrows * rowdupinner + (iis[kk] - 1) * rowdupinner + rowii for rowii in 1:rowdupinner, rowoo in 1:rowdupouter])
-        colduped = vec([(coloo - 1) * ncols * coldupinner + (jjs[kk] - 1) * coldupinner + colii for colii in 1:coldupinner, coloo in 1:coldupouter])
-        alliis[(kk - 1) * kkdupnum + (1:kkdupnum)] = repeat(rowduped, outer=[coldupouter*coldupinner])
-        alljjs[(kk - 1) * kkdupnum + (1:kkdupnum)] = repeat(colduped, inner=[rowdupouter*rowdupinner])
-    end
+    alliis, alljjs, allvvs = findnz(A2)
 
     # Create the shared-dupped portion
 
@@ -1217,4 +1269,122 @@ function matrixempty(vardims::Vector{Int64}, pardims::Vector{Int64})
     vardimlen = prod(vardims)
     pardimlen = prod(pardims)
     spzeros(vardimlen, pardimlen)
+end
+
+"""
+General duplication of a known matrix over additional dimensions.
+Falls back on matrixduplicate_general if not all inner-most and outer-most dupovers
+"""
+function matrixduplicate(A::SparseMatrixCSC{Float64, Int64}, rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdupover::Vector{Bool}, coldupover::Vector{Bool})
+    if sum(abs.(diff([true; rowdupover]))) <= 2 && sum(abs.(diff([true; coldupover]))) <= 2
+        matrixduplicate_extremes(A, rowdims, coldims, rowdupover, coldupover)
+    else
+        matrixduplicate_general(A, rowdims, coldims, rowdupover, coldupover)
+    end
+end
+
+"""
+Duplication of a known matrix over inner-most and outer-most dimensions
+"""
+function matrixduplicate_extremes(A::SparseMatrixCSC{Float64, Int64}, rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdupover::Vector{Bool}, coldupover::Vector{Bool})
+    outers, inners = interpretdupover(rowdupover)
+    rowdupouter = prod(rowdims[outers])
+    rowdupinner = prod(rowdims[inners])
+
+    outers, inners = interpretdupover(coldupover)
+    coldupouter = prod(coldims[outers])
+    coldupinner = prod(coldims[inners])
+
+    # Create fully-dupped portion
+    iis, jjs, vvs = findnz(A)
+
+    kkdupnum = rowdupouter*rowdupinner*coldupouter*coldupinner
+
+    allvvs = repeat(vvs, inner=[kkdupnum])
+    # Need to fill these next two in
+    alliis = zeros(Int64, length(iis) * kkdupnum)
+    alljjs = zeros(Int64, length(jjs) * kkdupnum)
+
+    nrows = size(A)[1]
+    ncols = size(A)[2]
+
+    for kk in 1:length(iis)
+        ## order is vec([(slow, fast) for fast in 1:N, slow in 1:M])
+        rowduped = vec([(rowoo - 1) * nrows * rowdupinner + (iis[kk] - 1) * rowdupinner + rowii for rowii in 1:rowdupinner, rowoo in 1:rowdupouter])
+        colduped = vec([(coloo - 1) * ncols * coldupinner + (jjs[kk] - 1) * coldupinner + colii for colii in 1:coldupinner, coloo in 1:coldupouter])
+        alliis[(kk - 1) * kkdupnum + (1:kkdupnum)] = repeat(rowduped, outer=[coldupouter*coldupinner])
+        alljjs[(kk - 1) * kkdupnum + (1:kkdupnum)] = repeat(colduped, inner=[rowdupouter*rowdupinner])
+    end
+
+    sparse(alliis, alljjs, allvvs, prod(rowdims), prod(coldims))
+end
+
+"""
+General duplication of a known matrix over additional dimensions.
+This is not constrained to have dupover only on inner-most and outer-most dimensions.
+"""
+function matrixduplicate_general(origA::SparseMatrixCSC{Float64, Int64}, rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdupover::Vector{Bool}, coldupover::Vector{Bool})
+    iis, jjs, vvs = findnz(origA)
+
+    A = spzeros(prod(rowdims), prod(coldims))
+
+    if !any(rowdupover)
+        findcol = zeros(coldims...)
+
+        for kk in 1:length(iis)
+            origcolsub = toindex(jjs[kk], coldims[.!coldupover])
+
+            # Get fulljjs for this
+            fullcolsub = repmat(Any[:], length(coldims))
+            fullcolsub[.!coldupover] = [origcolsub...]
+
+            findcol[fullcolsub...] = 1
+            fulljjs = find(findcol)
+            findcol[fullcolsub...] = 0
+
+            A[iis[kk], fulljjs] = vvs[kk]
+        end
+    elseif !any(coldupover)
+        findrow = zeros(rowdims...)
+        for kk in 1:length(iis)
+            origrowsub = toindex(iis[kk], rowdims[.!rowdupover])
+
+            # Get fulliis for this
+            fullrowsub = repmat(Any[:], length(rowdims))
+            fullrowsub[.!rowdupover] = [origrowsub...]
+
+            findrow[fullrowsub...] = 1
+            fulliis = find(findrow)
+            findrow[fullrowsub...] = 0
+
+            A[fulliis, jjs[kk]] = vvs[kk]
+        end
+    else
+        findrow = zeros(rowdims...)
+        findcol = zeros(coldims...)
+        for kk in 1:length(iis)
+            origrowsub = toindex(iis[kk], rowdims[.!rowdupover])
+            origcolsub = toindex(jjs[kk], coldims[.!coldupover])
+
+            # Get fulliis for this
+            fullrowsub = repmat(Any[:], length(rowdims))
+            fullrowsub[.!rowdupover] = [origrowsub...]
+
+            findrow[fullrowsub...] = 1
+            fulliis = find(findrow)
+            findrow[fullrowsub...] = 0
+
+            # Get fulljjs for this
+            fullcolsub = repmat(Any[:], length(coldims))
+            fullcolsub[.!coldupover] = [origcolsub...]
+
+            findcol[fullcolsub...] = 1
+            fulljjs = find(findcol)
+            findcol[fullcolsub...] = 0
+
+            A[fulliis, fulljjs] = vvs[kk]
+        end
+    end
+
+    A
 end
