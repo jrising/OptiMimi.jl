@@ -223,8 +223,11 @@ function roomdiagonal(model::Model, component::Symbol, variable::Symbol, paramet
 
         @assert dimsvar[.!dupovervar] == dimspar[.!dupoverpar] "Variable and parameter in roomdiagonal do not have the same dimensions: $component.$variable $dimsvar <> $component.$parameter $dimspar, after dup-ignore $dupover"
 
+        println("Starting $(dimsvar[.!dupovervar])")
         matrix = matrixdiagonal(dimsvar[.!dupovervar], gen)
+        println("Duplicating...")
         matrix2 = matrixduplicate(matrix, dimsvar, dimspar, dupovervar, dupoverpar)
+        println("done")
 
         LinearProgrammingRoom(component, variable, component, parameter, matrix2)
     end
@@ -915,7 +918,7 @@ function toindex(ii::Int64, dims::Vector{Int64})
     offset = ii - 1
     for dd in 1:length(dims)
         indexes[dd] = offset % dims[dd] + 1
-        offset = floor(Int64, offset / dims[dd])
+        offset = div(offset, dims[dd])
     end
 
     return indexes
@@ -958,6 +961,36 @@ function fromindexes(indexes::Matrix{Int64}, dims::Vector{Int64})
     end
 
     return offsets
+end
+
+"""
+Insert an extra dimension somewhere, adjusting offset (+1) values accordingly
+"""
+function insertdim(iis::Vector{Int64}, dims::Vector{Int64}, insertat::Int64, dimvalue::Int64, dimsize::Int64)
+    @assert insertat >= 1 && insertat <= length(dims) + 1
+    @assert dimvalue >= 1 && dimvalue <= dimsize
+    if insertat == 1
+        (iis - 1) * dimsize + dimvalue
+    elseif insertat == length(dims) + 1
+        (dimvalue - 1) * prod(dims) + iis
+    else
+        proddimsleft = prod(dims[1:insertat-1])
+        (div.(iis - 1, proddimsleft) * dimsize + dimvalue - 1) * proddimsleft + (iis - 1) .% proddimsleft + 1
+    end
+end
+
+"""
+Insert as many dims as needed to expand to the alldims
+"""
+function expanddims(iis::Vector{Int64}, alldims::Vector{Int64}, newdims::Vector{Bool}, newdimvalues::Vector{Int64})
+    insertat = findfirst(newdims)
+    iis2 = insertdim(iis, alldims[.!newdims], insertat, newdimvalues[1], alldims[insertat])
+    if length(newdimvalues) == 1
+        return iis2
+    else
+        newdims[insertat] = false
+        return expanddims(iis2, alldims, newdims, newdimvalues[2:end])
+    end
 end
 
 """
@@ -1077,8 +1110,19 @@ sum(A)
 function matrixdiagonal(dims::Vector{Int64}, gen::Function)
     dimlen = prod(dims)
     A = spzeros(dimlen, dimlen)
+    index = ones(Int64, length(dims))
     for ii in 1:dimlen
-        A[ii, ii] = gen(toindex(ii, dims)...)
+        A[ii, ii] = gen(index...)
+
+        index[1] += 1
+        for kk in 1:(length(dims) - 1)
+            if index[kk] <= dims[kk]
+                break
+            end
+            index[kk] = 1
+            index[kk+1] += 1
+        end
+        #A[ii, ii] = gen(toindex(ii, dims)...) # TOO SLOW
     end
 
     A
@@ -1376,65 +1420,39 @@ This is not constrained to have dupover only on inner-most and outer-most dimens
 function matrixduplicate_general(origA::SparseMatrixCSC{Float64, Int64}, rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdupover::Vector{Bool}, coldupover::Vector{Bool})
     iis, jjs, vvs = findnz(origA)
 
-    A = spzeros(prod(rowdims), prod(coldims))
+    alliis = Int64[]
+    alljjs = Int64[]
+    allvvs = Float64[]
 
     if !any(rowdupover)
-        findcol = zeros(coldims...)
-
-        for kk in 1:length(iis)
-            origcolsub = toindex(jjs[kk], coldims[.!coldupover])
-
-            # Get fulljjs for this
-            fullcolsub = repmat(Any[:], length(coldims))
-            fullcolsub[.!coldupover] = [origcolsub...]
-
-            findcol[fullcolsub...] = 1
-            fulljjs = find(findcol)
-            findcol[fullcolsub...] = 0
-
-            A[iis[kk], fulljjs] = vvs[kk]
+        newdimsizes = coldims[coldupover]
+        for kk in 1:prod(coldims[coldupover])
+            fulljjs = expanddims(jjs, coldims, coldupover, toindex(kk, newdimsizes))
+            append!(alliis, iis)
+            append!(alljjs, fulljjs)
+            append!(allvvs, vvs)
         end
     elseif !any(coldupover)
-        findrow = zeros(rowdims...)
-        for kk in 1:length(iis)
-            origrowsub = toindex(iis[kk], rowdims[.!rowdupover])
-
-            # Get fulliis for this
-            fullrowsub = repmat(Any[:], length(rowdims))
-            fullrowsub[.!rowdupover] = [origrowsub...]
-
-            findrow[fullrowsub...] = 1
-            fulliis = find(findrow)
-            findrow[fullrowsub...] = 0
-
-            A[fulliis, jjs[kk]] = vvs[kk]
+        newdimsizes = rowdims[rowdupover]
+        for kk in 1:prod(rowdims[rowdupover])
+            fulliis = expanddims(iis, rowdims, rowdupover, toindex(kk, newdimsizes))
+            append!(alliis, fulliis)
+            append!(alljjs, jjs)
+            append!(allvvs, vvs)
         end
     else
-        findrow = zeros(rowdims...)
-        findcol = zeros(coldims...)
-        for kk in 1:length(iis)
-            origrowsub = toindex(iis[kk], rowdims[.!rowdupover])
-            origcolsub = toindex(jjs[kk], coldims[.!coldupover])
-
-            # Get fulliis for this
-            fullrowsub = repmat(Any[:], length(rowdims))
-            fullrowsub[.!rowdupover] = [origrowsub...]
-
-            findrow[fullrowsub...] = 1
-            fulliis = find(findrow)
-            findrow[fullrowsub...] = 0
-
-            # Get fulljjs for this
-            fullcolsub = repmat(Any[:], length(coldims))
-            fullcolsub[.!coldupover] = [origcolsub...]
-
-            findcol[fullcolsub...] = 1
-            fulljjs = find(findcol)
-            findcol[fullcolsub...] = 0
-
-            A[fulliis, fulljjs] = vvs[kk]
+        newrowsizes = rowdims[rowdupover]
+        newcolsizes = coldims[coldupover]
+        for rowkk in 1:prod(rowdims[rowdupover])
+            for colkk in 1:prod(coldims[coldupover])
+                fulliis = expanddims(iis, rowdims, rowdupover, toindex(rowkk, newrowsizes))
+                fulljjs = expanddims(jjs, coldims, coldupover, toindex(colkk, newcolsizes))
+                append!(alliis, fulliis)
+                append!(alljjs, fulljjs)
+                append!(allvvs, vvs)
+            end
         end
     end
 
-    A
+    sparse(alliis, alljjs, allvvs, prod(rowdims), prod(coldims))
 end
