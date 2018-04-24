@@ -9,7 +9,7 @@ export LinearProgrammingHall, LinearProgrammingShaft, LinearProgrammingRoom, Lin
 export hallsingle, hall_relabel, hallvalues
 export shaftsingle, shaftvalues
 export roomdiagonal, roomdiagonalintersect, roomsingle, roomchunks, roomempty, roomintersect, room_relabel, room_relabel_parameter
-export varsum, fromindex
+export varsum, fromindex, fromindexes
 export setobjective!, setconstraint!, setconstraintoffset!, getconstraintoffset, clearconstraint!, setlower!, setupper!, addparameter!, addconstraint!
 ## Debugging
 export getroom, getnonzerorooms
@@ -446,6 +446,30 @@ Construct a hall from a room by summing over rows.
 """
 function varsum(room::LinearProgrammingRoom)
     LinearProgrammingHall(room.paramcomponent, room.parameter, vec(sum(room.A, 1)))
+end
+
+function varsum(room::LinearProgrammingRoom, axis::Int64, model::Model, newvar::Symbol)
+    vardims = getdims(model, room.varcomponent, room.variable)
+    iis, jjs, vvs = findnz(room.A)
+
+    indexes = toindexes(iis, vardims)
+    newiis = fromindexes(indexes[:, 1:length(vardims) != axis], vardims[1:length(vardims) != axis])
+
+    useiis = []
+    usejjs = []
+    usevvs = []
+    for newii in unique(newiis)
+        withinii = newiis .== newii
+        for newjj in unique(jjs[withinii])
+            withinij = jjs[withinii] .== newjj
+            push!(useiis, newii)
+            push!(usejjs, newjj)
+            push!(usevvs, sum(vvs[withinii][withinij]))
+        end
+    end
+
+    A = sparse(useiis, usejjs, usevvs, prod(vardims[1:length(vardims) != axis]), size(room.A, 2))
+    LinearProgrammingRoom(room.varcomponent, newvar, room.paramcomponent, room.parameter, A)
 end
 
 doc"""
@@ -898,6 +922,20 @@ function toindex(ii::Int64, dims::Vector{Int64})
 end
 
 """
+As `toindex`, but for many iis.  Ruturns N x D
+"""
+function toindexes(iis::Int64, dims::Vector{Int64})
+    indexes = Matrix{Int64}(length(iis), length(dims))
+    offsets = iis - 1
+    for dd in 1:length(dims)
+        indexes[:, dd] = offsets .% dims[dd] + 1
+        offsets = div.(offsets / dims[dd])
+    end
+
+    return indexes
+end
+
+"""
 Translate an index vector to an offset (+1).
 This seems to be faster irrespective of the tupleness of dims.
 """
@@ -908,6 +946,18 @@ function fromindex(index::Vector{Int64}, dims::Vector{Int64})
     end
 
     return offset
+end
+
+"""
+As `fromindex` but for many indexes (N x D)
+"""
+function fromindexes(indexes::Matrix{Int64}, dims::Vector{Int64})
+    offsets = indexes[:, end]
+    for ii in length(dims)-1:-1:1
+        offsets = (offsets - 1) * dims[ii] + indexes[:, ii]
+    end
+
+    return offsets
 end
 
 """
