@@ -6,7 +6,7 @@ import Mimi.metainfo
 import Base.*, Base.-, Base.+, Base.max
 
 export LinearProgrammingHall, LinearProgrammingShaft, LinearProgrammingRoom, LinearProgrammingHouse
-export hallsingle, hall_relabel, hallvalues
+export hallsingle, hall_relabel, hallvalues, hall_duplicate
 export shaftsingle, shaftvalues
 export roomdiagonal, roomdiagonalintersect, roomsingle, roomchunks, roomempty, roomintersect, room_relabel, room_relabel_parameter
 export varsum, fromindex, fromindexes
@@ -59,6 +59,21 @@ function hall_relabel(hall::LinearProgrammingHall, from::Symbol, tocomponent::Sy
     @assert hall.name == from "Name mismatch in hall_relabel: $(hall.name) <> $from"
 
     LinearProgrammingHall(tocomponent, toname, hall.f)
+end
+
+"""Connect a derivative to another component while adding an additional dimension"""
+function hall_duplicate(hall::LinearProgrammingHall, from::Symbol, tocomponent::Symbol, toname::Symbol, model::Model, newdims::Vector{Bool})
+    @assert hall.name == from "Name mismatch in hall_duplicate: $(hall.name) <> $from"
+
+    alldims = getdims(model, tocomponent, toname)
+
+    f = zeros(prod(alldims))
+    for kk in 1:prod(alldims[newdims])
+        fulliis = expanddims(collect(1:length(hall.f)), alldims, newdims, toindex(kk, alldims[newdims]))
+        f[fulliis] = hall.f
+    end
+    
+    LinearProgrammingHall(tocomponent, toname, f)
 end
 
 function -(hall::LinearProgrammingHall)
@@ -223,11 +238,8 @@ function roomdiagonal(model::Model, component::Symbol, variable::Symbol, paramet
 
         @assert dimsvar[.!dupovervar] == dimspar[.!dupoverpar] "Variable and parameter in roomdiagonal do not have the same dimensions: $component.$variable $dimsvar <> $component.$parameter $dimspar, after dup-ignore $dupover"
 
-        println("Starting $(dimsvar[.!dupovervar])")
         matrix = matrixdiagonal(dimsvar[.!dupovervar], gen)
-        println("Duplicating...")
         matrix2 = matrixduplicate(matrix, dimsvar, dimspar, dupovervar, dupoverpar)
-        println("done")
 
         LinearProgrammingRoom(component, variable, component, parameter, matrix2)
     end
@@ -254,6 +266,9 @@ function roomdiagonal(model::Model, component::Symbol, variable::Symbol, paramet
     end
 end
 
+"""
+gen returns a full matrix for all shared variables, in variable dimension order.
+"""
 function roomdiagonalintersect(model::Model, component::Symbol, variable::Symbol, parameter::Symbol, gen::Function)
     #println("$(now()) rd $component:$variable x $parameter")
     dimsvar = getdims(model, component, variable)
@@ -982,7 +997,7 @@ end
 """
 Insert as many dims as needed to expand to the alldims
 """
-function expanddims(iis::Vector{Int64}, alldims::Vector{Int64}, newdims::Vector{Bool}, newdimvalues::Vector{Int64})
+function expanddims(iis::Vector{Int64}, alldims::Vector{Int64}, newdims::AbstractVector{Bool}, newdimvalues::Vector{Int64})
     insertat = findfirst(newdims)
     iis2 = insertdim(iis, alldims[.!newdims], insertat, newdimvalues[1], alldims[insertat])
     if length(newdimvalues) == 1
@@ -1147,10 +1162,11 @@ function matrixdiagonal(dims::Vector{Int64}, gen::Function, dupover::Vector{Bool
     A
 end
 
-
+"""
+gen is called with each combination of unshared variables, and
+returns a full matrix for all shared variables, in variable dimension order.
+"""
 function matrixdiagonalintersect(rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdimnames::Vector{Symbol}, coldimnames::Vector{Symbol}, gen::Function)
-    A = spzeros(prod(rowdims), prod(coldims))
-
     common = intersect(rowdimnames, coldimnames)
 
     commonrow = Bool[dimname in common for dimname in rowdimnames]
@@ -1162,28 +1178,32 @@ function matrixdiagonalintersect(rowdims::Vector{Int64}, coldims::Vector{Int64},
     fullrowsub = repmat([0], length(rowdims))
     fullcolsub = repmat([0], length(coldims))
 
-    A = spzeros(prod(rowdims), prod(coldims))
+    alliis = []
+    alljjs = []
+    allvvs = []
     for ii in 1:prod(remainrowdims)
         for jj in 1:prod(remaincoldims)
             remainrowsub = toindex(ii, remainrowdims)
             remaincolsub = toindex(jj, remaincoldims)
 
-            fullrowsub[.!commonrow] = remainrowsub
-            fullcolsub[.!commoncol] = remaincolsub
+            Apart = gen(remainrowsub..., remaincolsub...)
+            kks = collect(1:prod(rowdims[commonrow]))
 
-            for kk in 1:prod(rowdims[commonrow])
-                commonsub = toindex(kk, rowdims[commonrow])
-                fullrowsub[commonrow] = commonsub
-                fullcolsub[commoncol] = commonsub
-
-                fullii = fromindex(fullrowsub, rowdims)
-                fulljj = fromindex(fullcolsub, coldims)
-                A[fullii, fulljj] = gen(fullrowsub..., fullcolsub...)
+            if (sum(.!commonrow) == 0)
+                append!(alliis, kks)
+            else
+                append!(alliis, expanddims(kks, rowdims, .!commonrow, remainrowsub))
             end
+            if (sum(.!commoncol) == 0)
+                append!(alljjs, kks)
+            else
+                append!(alljjs, expanddims(kks, coldims, .!commoncol, remaincolsub))
+            end
+            append!(allvvs, vec(Apart))
         end
     end
 
-    A
+    sparse(alliis, alljjs, allvvs, prod(rowdims), prod(coldims))
 end
 
 
