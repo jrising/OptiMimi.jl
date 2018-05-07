@@ -3,7 +3,7 @@ using DataFrames
 using Clp
 
 import Mimi.metainfo
-import Base.*, Base.-, Base.+, Base.max
+import Base.*, Base.-, Base.+, Base./, Base.max
 
 export LinearProgrammingHall, LinearProgrammingShaft, LinearProgrammingRoom, LinearProgrammingHouse
 export hallsingle, hall_relabel, hallvalues
@@ -63,6 +63,14 @@ end
 
 function -(hall::LinearProgrammingHall)
     LinearProgrammingHall(hall.component, hall.name, -hall.f)
+end
+
+function *(hall::LinearProgrammingHall, mm::Number)
+    LinearProgrammingHall(hall.component, hall.name, hall.f * mm)
+end
+
+function /(hall::LinearProgrammingHall, dd::Number)
+    LinearProgrammingHall(hall.component, hall.name, hall.f / dd)
 end
 
 """
@@ -1103,7 +1111,11 @@ function matrixdiagonal(dims::Vector{Int64}, gen::Function, dupover::Vector{Bool
     A
 end
 
-
+"""
+Identifies all the common dimensions, calling the generator function
+with an intersection matrix once for each value of the shared
+dimensions (filling out their diagonal).
+"""
 function matrixdiagonalintersect(rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdimnames::Vector{Symbol}, coldimnames::Vector{Symbol}, gen::Function)
     A = spzeros(prod(rowdims), prod(coldims))
 
