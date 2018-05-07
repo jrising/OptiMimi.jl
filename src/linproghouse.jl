@@ -6,7 +6,7 @@ import Mimi.metainfo
 import Base.*, Base.-, Base.+, Base./, Base.max
 
 export LinearProgrammingHall, LinearProgrammingShaft, LinearProgrammingRoom, LinearProgrammingHouse
-export hallsingle, hall_relabel, hallvalues
+export hallsingle, hall_relabel, hallvalues, hall_duplicate
 export shaftsingle, shaftvalues
 export roomdiagonal, roomdiagonalintersect, roomsingle, roomchunks, roomempty, roomintersect, room_relabel, room_relabel_parameter
 export varsum, fromindex, fromindexes
@@ -59,6 +59,21 @@ function hall_relabel(hall::LinearProgrammingHall, from::Symbol, tocomponent::Sy
     @assert hall.name == from "Name mismatch in hall_relabel: $(hall.name) <> $from"
 
     LinearProgrammingHall(tocomponent, toname, hall.f)
+end
+
+"""Connect a derivative to another component while adding an additional dimension"""
+function hall_duplicate(hall::LinearProgrammingHall, from::Symbol, tocomponent::Symbol, toname::Symbol, model::Model, newdims::Vector{Bool})
+    @assert hall.name == from "Name mismatch in hall_duplicate: $(hall.name) <> $from"
+
+    alldims = getdims(model, tocomponent, toname)
+
+    f = zeros(prod(alldims))
+    for kk in 1:prod(alldims[newdims])
+        fulliis = expanddims(collect(1:length(hall.f)), alldims, newdims, toindex(kk, alldims[newdims]))
+        f[fulliis] = hall.f
+    end
+
+    LinearProgrammingHall(tocomponent, toname, f)
 end
 
 function -(hall::LinearProgrammingHall)
@@ -259,6 +274,9 @@ function roomdiagonal(model::Model, component::Symbol, variable::Symbol, paramet
     end
 end
 
+"""
+gen returns a full matrix for all shared variables, in variable dimension order.
+"""
 function roomdiagonalintersect(model::Model, component::Symbol, variable::Symbol, parameter::Symbol, gen::Function)
     #println("$(now()) rd $component:$variable x $parameter")
     dimsvar = getdims(model, component, variable)
@@ -923,7 +941,7 @@ function toindex(ii::Int64, dims::Vector{Int64})
     offset = ii - 1
     for dd in 1:length(dims)
         indexes[dd] = offset % dims[dd] + 1
-        offset = floor(Int64, offset / dims[dd])
+        offset = div(offset, dims[dd])
     end
 
     return indexes
@@ -966,6 +984,36 @@ function fromindexes(indexes::Matrix{Int64}, dims::Vector{Int64})
     end
 
     return offsets
+end
+
+"""
+Insert an extra dimension somewhere, adjusting offset (+1) values accordingly
+"""
+function insertdim(iis::Vector{Int64}, dims::Vector{Int64}, insertat::Int64, dimvalue::Int64, dimsize::Int64)
+    @assert insertat >= 1 && insertat <= length(dims) + 1
+    @assert dimvalue >= 1 && dimvalue <= dimsize
+    if insertat == 1
+        (iis - 1) * dimsize + dimvalue
+    elseif insertat == length(dims) + 1
+        (dimvalue - 1) * prod(dims) + iis
+    else
+        proddimsleft = prod(dims[1:insertat-1])
+        (div.(iis - 1, proddimsleft) * dimsize + dimvalue - 1) * proddimsleft + (iis - 1) .% proddimsleft + 1
+    end
+end
+
+"""
+Insert as many dims as needed to expand to the alldims
+"""
+function expanddims(iis::Vector{Int64}, alldims::Vector{Int64}, newdims::AbstractVector{Bool}, newdimvalues::Vector{Int64})
+    insertat = findfirst(newdims)
+    iis2 = insertdim(iis, alldims[.!newdims], insertat, newdimvalues[1], alldims[insertat])
+    if length(newdimvalues) == 1
+        return iis2
+    else
+        newdims[insertat] = false
+        return expanddims(iis2, alldims, newdims, newdimvalues[2:end])
+    end
 end
 
 """
@@ -1085,8 +1133,19 @@ sum(A)
 function matrixdiagonal(dims::Vector{Int64}, gen::Function)
     dimlen = prod(dims)
     A = spzeros(dimlen, dimlen)
+    index = ones(Int64, length(dims))
     for ii in 1:dimlen
-        A[ii, ii] = gen(toindex(ii, dims)...)
+        A[ii, ii] = gen(index...)
+
+        index[1] += 1
+        for kk in 1:(length(dims) - 1)
+            if index[kk] <= dims[kk]
+                break
+            end
+            index[kk] = 1
+            index[kk+1] += 1
+        end
+        #A[ii, ii] = gen(toindex(ii, dims)...) # TOO SLOW
     end
 
     A
@@ -1115,10 +1174,11 @@ end
 Identifies all the common dimensions, calling the generator function
 with an intersection matrix once for each value of the shared
 dimensions (filling out their diagonal).
+
+gen is called with each combination of unshared variables, and
+returns a full matrix for all shared variables, in variable dimension order.
 """
 function matrixdiagonalintersect(rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdimnames::Vector{Symbol}, coldimnames::Vector{Symbol}, gen::Function)
-    A = spzeros(prod(rowdims), prod(coldims))
-
     common = intersect(rowdimnames, coldimnames)
 
     commonrow = Bool[dimname in common for dimname in rowdimnames]
@@ -1130,28 +1190,32 @@ function matrixdiagonalintersect(rowdims::Vector{Int64}, coldims::Vector{Int64},
     fullrowsub = repmat([0], length(rowdims))
     fullcolsub = repmat([0], length(coldims))
 
-    A = spzeros(prod(rowdims), prod(coldims))
+    alliis = []
+    alljjs = []
+    allvvs = []
     for ii in 1:prod(remainrowdims)
         for jj in 1:prod(remaincoldims)
             remainrowsub = toindex(ii, remainrowdims)
             remaincolsub = toindex(jj, remaincoldims)
 
-            fullrowsub[.!commonrow] = remainrowsub
-            fullcolsub[.!commoncol] = remaincolsub
+            Apart = gen(remainrowsub..., remaincolsub...)
+            kks = collect(1:prod(rowdims[commonrow]))
 
-            for kk in 1:prod(rowdims[commonrow])
-                commonsub = toindex(kk, rowdims[commonrow])
-                fullrowsub[commonrow] = commonsub
-                fullcolsub[commoncol] = commonsub
-
-                fullii = fromindex(fullrowsub, rowdims)
-                fulljj = fromindex(fullcolsub, coldims)
-                A[fullii, fulljj] = gen(fullrowsub..., fullcolsub...)
+            if (sum(.!commonrow) == 0)
+                append!(alliis, kks)
+            else
+                append!(alliis, expanddims(kks, rowdims, .!commonrow, remainrowsub))
             end
+            if (sum(.!commoncol) == 0)
+                append!(alljjs, kks)
+            else
+                append!(alljjs, expanddims(kks, coldims, .!commoncol, remaincolsub))
+            end
+            append!(allvvs, vec(Apart))
         end
     end
 
-    A
+    sparse(alliis, alljjs, allvvs, prod(rowdims), prod(coldims))
 end
 
 
@@ -1388,65 +1452,39 @@ This is not constrained to have dupover only on inner-most and outer-most dimens
 function matrixduplicate_general(origA::SparseMatrixCSC{Float64, Int64}, rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdupover::Vector{Bool}, coldupover::Vector{Bool})
     iis, jjs, vvs = findnz(origA)
 
-    A = spzeros(prod(rowdims), prod(coldims))
+    alliis = Int64[]
+    alljjs = Int64[]
+    allvvs = Float64[]
 
     if !any(rowdupover)
-        findcol = zeros(coldims...)
-
-        for kk in 1:length(iis)
-            origcolsub = toindex(jjs[kk], coldims[.!coldupover])
-
-            # Get fulljjs for this
-            fullcolsub = repmat(Any[:], length(coldims))
-            fullcolsub[.!coldupover] = [origcolsub...]
-
-            findcol[fullcolsub...] = 1
-            fulljjs = find(findcol)
-            findcol[fullcolsub...] = 0
-
-            A[iis[kk], fulljjs] = vvs[kk]
+        newdimsizes = coldims[coldupover]
+        for kk in 1:prod(coldims[coldupover])
+            fulljjs = expanddims(jjs, coldims, coldupover, toindex(kk, newdimsizes))
+            append!(alliis, iis)
+            append!(alljjs, fulljjs)
+            append!(allvvs, vvs)
         end
     elseif !any(coldupover)
-        findrow = zeros(rowdims...)
-        for kk in 1:length(iis)
-            origrowsub = toindex(iis[kk], rowdims[.!rowdupover])
-
-            # Get fulliis for this
-            fullrowsub = repmat(Any[:], length(rowdims))
-            fullrowsub[.!rowdupover] = [origrowsub...]
-
-            findrow[fullrowsub...] = 1
-            fulliis = find(findrow)
-            findrow[fullrowsub...] = 0
-
-            A[fulliis, jjs[kk]] = vvs[kk]
+        newdimsizes = rowdims[rowdupover]
+        for kk in 1:prod(rowdims[rowdupover])
+            fulliis = expanddims(iis, rowdims, rowdupover, toindex(kk, newdimsizes))
+            append!(alliis, fulliis)
+            append!(alljjs, jjs)
+            append!(allvvs, vvs)
         end
     else
-        findrow = zeros(rowdims...)
-        findcol = zeros(coldims...)
-        for kk in 1:length(iis)
-            origrowsub = toindex(iis[kk], rowdims[.!rowdupover])
-            origcolsub = toindex(jjs[kk], coldims[.!coldupover])
-
-            # Get fulliis for this
-            fullrowsub = repmat(Any[:], length(rowdims))
-            fullrowsub[.!rowdupover] = [origrowsub...]
-
-            findrow[fullrowsub...] = 1
-            fulliis = find(findrow)
-            findrow[fullrowsub...] = 0
-
-            # Get fulljjs for this
-            fullcolsub = repmat(Any[:], length(coldims))
-            fullcolsub[.!coldupover] = [origcolsub...]
-
-            findcol[fullcolsub...] = 1
-            fulljjs = find(findcol)
-            findcol[fullcolsub...] = 0
-
-            A[fulliis, fulljjs] = vvs[kk]
+        newrowsizes = rowdims[rowdupover]
+        newcolsizes = coldims[coldupover]
+        for rowkk in 1:prod(rowdims[rowdupover])
+            for colkk in 1:prod(coldims[coldupover])
+                fulliis = expanddims(iis, rowdims, rowdupover, toindex(rowkk, newrowsizes))
+                fulljjs = expanddims(jjs, coldims, coldupover, toindex(colkk, newcolsizes))
+                append!(alliis, fulliis)
+                append!(alljjs, fulljjs)
+                append!(allvvs, vvs)
+            end
         end
     end
 
-    A
+    sparse(alliis, alljjs, allvvs, prod(rowdims), prod(coldims))
 end
