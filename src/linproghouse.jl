@@ -8,7 +8,7 @@ import Base.*, Base.-, Base.+, Base./, Base.max
 export LinearProgrammingHall, LinearProgrammingShaft, LinearProgrammingRoom, LinearProgrammingHouse
 export hallsingle, hall_relabel, hallvalues, hall_duplicate
 export shaftsingle, shaftvalues
-export roomdiagonal, roomdiagonalintersect, roomsingle, roomchunks, roomempty, roomintersect, room_relabel, room_relabel_parameter
+export roomdiagonal, roomdiagonalintersect, roomsingle, roomchunks, roomempty, roomintersect, room_relabel, room_relabel_parameter, room_duplicate
 export varsum, fromindex, fromindexes
 export setobjective!, setconstraint!, setconstraintoffset!, getconstraintoffset, clearconstraint!, setlower!, setupper!, addparameter!, addconstraint!
 ## Debugging
@@ -307,6 +307,7 @@ end
 
 """
 Call with matrices for each combination of chunk variables
+    Chunked variables must be consecutive at the end.
 """
 function roomchunks(model::Model, component::Symbol, variable::Symbol, parameter::Symbol, gen::Function, varchunk::Vector{Symbol}, parchunk::Vector{Symbol})
     #println("$(now()) rc $component:$variable x $parameter")
@@ -409,6 +410,43 @@ function room_relabel_parameter(room::LinearProgrammingRoom, from::Symbol, tocom
     @assert room.parameter == from "Parameter name mismatch in room_relabel_parameter: $(room.variable) <> $from"
 
     LinearProgrammingRoom(room.varcomponent, room.variable, tocomponent, toname, room.A)
+end
+
+"""Connect a derivative to another component while adding an additional dimension"""
+function room_duplicate(room::LinearProgrammingRoom, tovariable::Symbol, toparameter::Symbol, model::Model)
+    parolddimnames = getdimnames(model, room.paramcomponent, room.parameter)
+    parnewdimnames = getdimnames(model, room.paramcomponent, toparameter)
+    @assert issubset(parolddimnames, parnewdimnames)
+    varolddimnames = getdimnames(model, room.varcomponent, room.variable)
+    varnewdimnames = getdimnames(model, room.varcomponent, tovariable)
+    @assert issubset(varolddimnames, varnewdimnames)
+
+    rowdupover = Bool[]
+    jj = 1
+    for ii in 1:length(varnewdimnames)
+        if jj <= length(varolddimnames) && varnewdimnames[ii] == varolddimnames[jj]
+            jj += 1
+            push!(rowdupover, false)
+        else
+            push!(rowdupover, true)
+        end
+    end
+    @assert jj == length(varolddimnames) + 1 "Got $jj after matching $varolddimnames in $varnewdimnames for $rowdupover"
+
+    coldupover = Bool[]
+    jj = 1
+    for ii in 1:length(parnewdimnames)
+        if jj <= length(parolddimnames) && parnewdimnames[ii] == parolddimnames[jj]
+            jj += 1
+            push!(coldupover, false)
+        else
+            push!(coldupover, true)
+        end
+    end
+    @assert jj == length(parolddimnames) + 1 "Got $jj after matching $parolddimnames in $parnewdimnames for $coldupover"
+
+    A = matrixduplicate(room.A, getdims(model, room.varcomponent, tovariable), getdims(model, room.paramcomponent, toparameter), rowdupover, coldupover)
+    LinearProgrammingRoom(room.varcomponent, tovariable, room.paramcomponent, toparameter, A)
 end
 
 """
@@ -1261,17 +1299,22 @@ function matrixsingle(vardims::Vector{Int64}, pardims::Vector{Int64}, gen::Funct
 end
 
 """
-matrixchunks(rowdims, coldims, gen, rowchunks, parchunks)
+matrixchunks(rowdims, coldims, gen, rowchunks, colchunks)
 Call the `gen` function with all combinations of chunked indices.
+    rowchunks and colchunks is number of row and col vars at end to chunk.
 """
 function matrixchunks(rowdims::Vector{Int64}, coldims::Vector{Int64}, gen::Function, rowchunk::Int64, colchunk::Int64)
-    A = spzeros(prod(rowdims), prod(coldims))
+    alliis = Int64[]
+    alljjs = Int64[]
+    allvvs = Float64[]
+    #A = spzeros(prod(rowdims), prod(coldims))
 
     chunkrowdims = rowdims[end-rowchunk+1:end]
     chunkrowdimlen = prod(chunkrowdims)
     chunkcoldims = coldims[end-colchunk+1:end]
     chunkcoldimlen = prod(chunkcoldims)
     for ii in 1:chunkrowdimlen
+        println(ii / chunkrowdimlen)
         rowindex = toindex(ii, chunkrowdims)
         for jj in 1:chunkcoldimlen
             colindex = toindex(jj, chunkcoldims)
@@ -1281,11 +1324,20 @@ function matrixchunks(rowdims::Vector{Int64}, coldims::Vector{Int64}, gen::Funct
             leftii = fromindex([ones(Int64, length(coldims) - colchunk); colindex], coldims)
             rightii = fromindex([coldims[1:length(coldims) - colchunk]; colindex], coldims)
 
-            A[topii:bottomii, leftii:rightii] = gen(rowindex..., colindex...)
+            subA = gen(rowindex..., colindex...)
+            @assert size(subA)[1] == bottomii - topii + 1 "Got matrix of size $(size(subA)) for rows $topii - $bottomii"
+            @assert size(subA)[2] == rightii - leftii + 1 "Got matrix of size $(size(subA)) for columns $leftii - $rightii"
+            
+            iis, jjs, vvs = findnz(subA)
+            append!(alliis, iis + topii - 1)
+            append!(alljjs, jjs + leftii - 1)
+            append!(allvvs, vvs)
+            #A[topii:bottomii, leftii:rightii] = gen(rowindex..., colindex...)
         end
     end
 
-    A
+    sparse(alliis, alljjs, allvvs, prod(rowdims), prod(coldims))
+    #A
 end
 
 """
