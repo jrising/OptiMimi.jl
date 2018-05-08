@@ -3,7 +3,7 @@ using DataFrames
 using Clp
 
 import Mimi.metainfo
-import Base.*, Base.-, Base.+, Base.max
+import Base.*, Base.-, Base.+, Base./, Base.max
 
 export LinearProgrammingHall, LinearProgrammingShaft, LinearProgrammingRoom, LinearProgrammingHouse
 export hallsingle, hall_relabel, hallvalues, hall_duplicate
@@ -72,12 +72,20 @@ function hall_duplicate(hall::LinearProgrammingHall, from::Symbol, tocomponent::
         fulliis = expanddims(collect(1:length(hall.f)), alldims, newdims, toindex(kk, alldims[newdims]))
         f[fulliis] = hall.f
     end
-    
+
     LinearProgrammingHall(tocomponent, toname, f)
 end
 
 function -(hall::LinearProgrammingHall)
     LinearProgrammingHall(hall.component, hall.name, -hall.f)
+end
+
+function *(hall::LinearProgrammingHall, mm::Number)
+    LinearProgrammingHall(hall.component, hall.name, hall.f * mm)
+end
+
+function /(hall::LinearProgrammingHall, dd::Number)
+    LinearProgrammingHall(hall.component, hall.name, hall.f / dd)
 end
 
 """
@@ -1163,6 +1171,10 @@ function matrixdiagonal(dims::Vector{Int64}, gen::Function, dupover::Vector{Bool
 end
 
 """
+Identifies all the common dimensions, calling the generator function
+with an intersection matrix once for each value of the shared
+dimensions (filling out their diagonal).
+
 gen is called with each combination of unshared variables, and
 returns a full matrix for all shared variables, in variable dimension order.
 """
