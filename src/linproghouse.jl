@@ -471,7 +471,7 @@ function varsum(room::LinearProgrammingRoom, axis::Int64, model::Model, newvar::
     iis, jjs, vvs = findnz(room.A)
 
     indexes = toindexes(iis, vardims)
-    newiis = fromindexes(indexes[:, 1:length(vardims) != axis], vardims[1:length(vardims) != axis])
+    newiis = fromindexes(indexes[:, 1:length(vardims) .!= axis], vardims[1:length(vardims) .!= axis])
 
     useiis = []
     usejjs = []
@@ -486,7 +486,7 @@ function varsum(room::LinearProgrammingRoom, axis::Int64, model::Model, newvar::
         end
     end
 
-    A = sparse(useiis, usejjs, usevvs, prod(vardims[1:length(vardims) != axis]), size(room.A, 2))
+    A = sparse(useiis, usejjs, usevvs, prod(vardims[1:length(vardims) .!= axis]), size(room.A, 2))
     LinearProgrammingRoom(room.varcomponent, newvar, room.paramcomponent, room.parameter, A)
 end
 
@@ -942,12 +942,12 @@ end
 """
 As `toindex`, but for many iis.  Ruturns N x D
 """
-function toindexes(iis::Int64, dims::Vector{Int64})
+function toindexes(iis::Vector{Int64}, dims::Vector{Int64})
     indexes = Matrix{Int64}(length(iis), length(dims))
     offsets = iis - 1
     for dd in 1:length(dims)
         indexes[:, dd] = offsets .% dims[dd] + 1
-        offsets = div.(offsets / dims[dd])
+        offsets = div.(offsets, dims[dd])
     end
 
     return indexes
