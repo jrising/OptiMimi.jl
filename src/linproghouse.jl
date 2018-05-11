@@ -1314,7 +1314,6 @@ function matrixchunks(rowdims::Vector{Int64}, coldims::Vector{Int64}, gen::Funct
     chunkcoldims = coldims[end-colchunk+1:end]
     chunkcoldimlen = prod(chunkcoldims)
     for ii in 1:chunkrowdimlen
-        println(ii / chunkrowdimlen)
         rowindex = toindex(ii, chunkrowdims)
         for jj in 1:chunkcoldimlen
             colindex = toindex(jj, chunkcoldims)
