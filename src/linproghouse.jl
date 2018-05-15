@@ -9,7 +9,7 @@ export LinearProgrammingHall, LinearProgrammingShaft, LinearProgrammingRoom, Lin
 export hallsingle, hall_relabel, hallvalues, hall_duplicate
 export shaftsingle, shaftvalues
 export roomdiagonal, roomdiagonalintersect, roomsingle, roomchunks, roomempty, roomintersect, room_relabel, room_relabel_parameter, room_duplicate
-export varsum, fromindex, fromindexes
+export varsum, fromindex, fromindexes, discounted
 export setobjective!, setconstraint!, setconstraintoffset!, getconstraintoffset, clearconstraint!, setlower!, setupper!, addparameter!, addconstraint!
 ## Debugging
 export getroom, getnonzerorooms
@@ -535,6 +535,30 @@ function varsum(room::LinearProgrammingRoom, axis::Int64, model::Model, newvar::
     A = sparse(useiis, usejjs, usevvs, prod(vardims[1:length(vardims) .!= axis]), size(room.A, 2))
     LinearProgrammingRoom(room.varcomponent, newvar, room.paramcomponent, room.parameter, A)
 end
+
+"""
+Discount economic costs in room.  Only rows are discounted (i.e., doesn't matter when action made, just when cost incurred).
+"""
+function discounted(model::Model, room::LinearProgrammingRoom, rate::Float64)
+    dims = getdims(model, room.varcomponent, room.variable)
+
+    dupover2 = Bool[dimname != :time for dimname in getdimnames(model, room.varcomponent, room.variable)]
+    outers, inners = interpretdupover(dupover2)
+    dupouter = prod(dims[outers])
+    dupinner = prod(dims[inners])
+
+    timevalues = collect(1:getindexcount(model, :time))
+    alltime = repeat(timevalues, inner=[dupinner], outer=[dupouter])
+
+    discount = exp.(-rate * (alltime - 1))
+    # discounted = room.A .* discount
+    iis, jjs, vvs = findnz(room.A)
+    vvs2 = vvs .* discount[iis]
+    discounted = sparse(iis, jjs, vvs2, size(room.A, 1), size(room.A, 2))
+
+    LinearProgrammingRoom(room.varcomponent, room.variable, room.paramcomponent, room.parameter, discounted)
+end
+
 
 doc"""
     LinearProgrammingHouse
@@ -1326,7 +1350,7 @@ function matrixchunks(rowdims::Vector{Int64}, coldims::Vector{Int64}, gen::Funct
             subA = gen(rowindex..., colindex...)
             @assert size(subA)[1] == bottomii - topii + 1 "Got matrix of size $(size(subA)) for rows $topii - $bottomii"
             @assert size(subA)[2] == rightii - leftii + 1 "Got matrix of size $(size(subA)) for columns $leftii - $rightii"
-            
+
             iis, jjs, vvs = findnz(subA)
             append!(alliis, iis + topii - 1)
             append!(alljjs, jjs + leftii - 1)
