@@ -1025,7 +1025,7 @@ end
 
 """
 Translate an index vector to an offset (+1).
-This seems to be faster irrespective of the tupleness of dims.
+This seems to be faster than sub2ind irrespective of the tupleness of dims.
 """
 function fromindex(index::Vector{Int64}, dims::Vector{Int64})
     offset = index[end]
