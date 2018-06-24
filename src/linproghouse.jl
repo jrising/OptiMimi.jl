@@ -875,7 +875,7 @@ Finds a range within the matrix for which the results become minimally
 infeasible.  In other words, suppose that the full linear programming
 matrix is $A$.  It returns $i$, $j$, such that $A[1:i, :]$ is
 infeasible, but $A[1:i-1, :]$ is not, and $A[j:end, :]$ is infeasible
-but $A[j+1:end, :]$ is not.
+but $A[j-1:end, :]$ is not.
 
 # Arguments
 * `house::LinearProgrammingHouse`: An infeasible LinearProgrammingHouse.
