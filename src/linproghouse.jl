@@ -84,6 +84,10 @@ function *(hall::LinearProgrammingHall, mm::Number)
     LinearProgrammingHall(hall.component, hall.name, hall.f * mm)
 end
 
+function *(mm::Number, hall::LinearProgrammingHall)
+    LinearProgrammingHall(hall.component, hall.name, mm * hall.f)
+end
+
 function /(hall::LinearProgrammingHall, dd::Number)
     LinearProgrammingHall(hall.component, hall.name, hall.f / dd)
 end
@@ -577,7 +581,7 @@ $$x_{lower} \le x \le x_{upper}$$
 * `parameters::Vector{Symbol}`: The names of each variable.
 * `constcomps::Vector{Symbol}`: The components defining each parameter.
 * `constraints::Vector{Symbol}`: The names of each parameter.
-* `constdictionary::Dict{Symbol, Symbol}`: The names used in `constraints` must be unique, but can refer to the same parameter by including an entry in this disctionary mapping the unique name to the true variable name.
+* `namedictionary::Dict{Symbol, Symbol}`: The names used in `constraints` must be unique, but can refer to the same parameter by including an entry in this disctionary mapping the unique name to the true variable name.
 * `lowers::Vector{Float64}`: The lower bound for each parameter.
 * `uppers::Vector{Float64}`: The upper bound for each parameter.
 * `f::Vector{Float64}`: The derivative of the objective function for each parameter.
@@ -590,7 +594,7 @@ type LinearProgrammingHouse
     parameters::Vector{Symbol}
     constcomps::Vector{Symbol}
     constraints::Vector{Symbol}
-    constdictionary::Dict{Symbol, Symbol}
+    namedictionary::Dict{Symbol, Symbol}
     lowers::Vector{Float64}
     uppers::Vector{Float64}
     f::Vector{Float64} # length of parameters
@@ -598,13 +602,13 @@ type LinearProgrammingHouse
     b::Vector{Float64} # length of constraints
 end
 
-function LinearProgrammingHouse(model::Model, paramcomps::Vector{Symbol}, parameters::Vector{Symbol}, constcomps::Vector{Symbol}, constraints::Vector{Symbol}, constdictionary::Dict{Symbol, Symbol}=Dict{Symbol, Symbol}())
-    paramlen = sum(varlengths(model, paramcomps, parameters))
-    variablelen = sum(varlengths(model, constcomps, constraints, constdictionary))
+function LinearProgrammingHouse(model::Model, paramcomps::Vector{Symbol}, parameters::Vector{Symbol}, constcomps::Vector{Symbol}, constraints::Vector{Symbol}, namedictionary::Dict{Symbol, Symbol}=Dict{Symbol, Symbol}())
+    paramlen = sum(varlengths(model, paramcomps, parameters, namedictionary))
+    variablelen = sum(varlengths(model, constcomps, constraints, namedictionary))
     A = spzeros(variablelen, paramlen)
     f = zeros(paramlen)
     b = zeros(variablelen)
-    LinearProgrammingHouse(model, paramcomps, parameters, constcomps, constraints, constdictionary, zeros(length(f)), Inf * ones(length(f)), f, A, b)
+    LinearProgrammingHouse(model, paramcomps, parameters, constcomps, constraints, namedictionary, zeros(length(f)), Inf * ones(length(f)), f, A, b)
 end
 
 function addparameter!(house::LinearProgrammingHouse, component::Symbol, parameter::Symbol)
@@ -623,7 +627,7 @@ function addconstraint!(house::LinearProgrammingHouse, component::Symbol, constr
 
     append!(house.constcomps, [component])
     append!(house.constraints, [constraint])
-    house.constdictionary[constraint] = variable
+    house.namedictionary[constraint] = variable
     append!(house.b, zeros(varlen))
     house.A = [house.A; spzeros(varlen, length(house.f))]
 end
@@ -631,7 +635,7 @@ end
 function setobjective!(house::LinearProgrammingHouse, hall::LinearProgrammingHall)
     @assert hall.name in house.parameters "$(hall.name) not a known parameter"
     kk = findfirst((house.paramcomps .== hall.component) .& (house.parameters .== hall.name))
-    paramspans = varlengths(house.model, house.paramcomps, house.parameters)
+    paramspans = varlengths(house.model, house.paramcomps, house.parameters, house.namedictionary)
     @assert length(hall.f) == paramspans[kk] "Length of parameter $(hall.name) unexpected: $(length(hall.f)) <> $(paramspans[kk])"
     before = sum(paramspans[1:kk-1])
     for ii in 1:paramspans[kk]
@@ -646,8 +650,8 @@ function setconstraint!(house::LinearProgrammingHouse, room::LinearProgrammingRo
     ll = findfirst((house.constcomps .== room.varcomponent) .& (house.constraints .== room.variable))
     @assert ll > 0 "$(room.varcomponent).$(room.variable) not a known variable"
 
-    paramspans = varlengths(house.model, house.paramcomps, house.parameters)
-    constspans = varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)
+    paramspans = varlengths(house.model, house.paramcomps, house.parameters, house.namedictionary)
+    constspans = varlengths(house.model, house.constcomps, house.constraints, house.namedictionary)
     @assert size(room.A, 1) == constspans[ll] "Length of variable $(room.variable) unexpected: $(size(room.A, 1)) given <> $(constspans[ll])"
     @assert size(room.A, 2) == paramspans[kk] "Length of parameter $(room.parameter) unexpected: $(size(room.A, 2)) given <> $(paramspans[kk])"
 
@@ -666,11 +670,11 @@ function getroom(house::LinearProgrammingHouse, varcomponent::Symbol, variable::
     @assert variable in house.constraints "$variable not a known variable"
 
     # Determine where to index into vector
-    constspans = varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)
+    constspans = varlengths(house.model, house.constcomps, house.constraints, house.namedictionary)
     rowkk = findfirst((house.constcomps .== varcomponent) .& (house.constraints .== variable))
     rowbefore = sum(constspans[1:rowkk-1])
 
-    paramspans = varlengths(house.model, house.paramcomps, house.parameters)
+    paramspans = varlengths(house.model, house.paramcomps, house.parameters, house.namedictionary)
     colkk = findfirst((house.paramcomps .== paramcomponent) .& (house.parameters .== parameter))
     colbefore = sum(paramspans[1:colkk-1])
 
@@ -718,7 +722,7 @@ Set offset values within a `LinearProgrammingHouse`.
 function setconstraintoffset!(house::LinearProgrammingHouse, component::Symbol, variable::Symbol, f::Vector{Float64})
     @assert variable in house.constraints "$(variable) not a known variable"
     kk = findfirst((house.constcomps .== component) .& (house.constraints .== variable))
-    constspans = varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)
+    constspans = varlengths(house.model, house.constcomps, house.constraints, house.namedictionary)
     @assert length(f) == constspans[kk] "Length of parameter $(variable) unexpected: $(length(f)) <> $(constspans[kk])"
     before = sum(constspans[1:kk-1])
     for ii in 1:constspans[kk]
@@ -742,7 +746,7 @@ function getconstraintoffset(house::LinearProgrammingHouse, component::Symbol, v
     @assert variable in house.constraints "$variable not a known variable"
 
     # Determine where to index into vector
-    constspans = varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)
+    constspans = varlengths(house.model, house.constcomps, house.constraints, house.namedictionary)
     kk = findfirst((house.constcomps .== component) .& (house.constraints .== variable))
     before = sum(constspans[1:kk-1])
 
@@ -761,7 +765,7 @@ function clearconstraint!(house::LinearProgrammingHouse, component::Symbol, vari
     @assert variable in house.constraints "$(variable) not a known variable"
 
     ll = findfirst((house.constcomps .== component) .& (house.constraints .== variable))
-    constspans = varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)
+    constspans = varlengths(house.model, house.constcomps, house.constraints, house.namedictionary)
 
     constbefore = sum(constspans[1:ll-1])
 
@@ -772,7 +776,7 @@ end
 function setlower!(house::LinearProgrammingHouse, hall::LinearProgrammingHall)
     @assert hall.name in house.parameters "$(hall.name) not a known parameter"
     kk = findfirst((house.paramcomps .== hall.component) .& (house.parameters .== hall.name))
-    paramspans = varlengths(house.model, house.paramcomps, house.parameters)
+    paramspans = varlengths(house.model, house.paramcomps, house.parameters, house.namedictionary)
     @assert length(hall.f) == paramspans[kk] "Length of parameter $(hall.name) unexpected: $(length(hall.f)) <> $(paramspans[kk])"
     before = sum(paramspans[1:kk-1])
     for ii in 1:paramspans[kk]
@@ -784,7 +788,7 @@ end
 function setupper!(house::LinearProgrammingHouse, hall::LinearProgrammingHall)
     @assert hall.name in house.parameters "$(hall.name) not a known parameter"
     kk = findfirst((house.paramcomps .== hall.component) .& (house.parameters .== hall.name))
-    paramspans = varlengths(house.model, house.paramcomps, house.parameters)
+    paramspans = varlengths(house.model, house.paramcomps, house.parameters, house.namedictionary)
     @assert length(hall.f) == paramspans[kk] "Length of parameter $(hall.name) unexpected: $(length(hall.f)) <> $(paramspans[kk])"
     before = sum(paramspans[1:kk-1])
     for ii in 1:paramspans[kk]
@@ -795,11 +799,11 @@ end
 
 function gethouse(house::LinearProgrammingHouse, rr::Int64, cc::Int64)
     # Determine the row and column names
-    varii = findlast(cumsum(varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)) .< rr) + 1
-    parii = findlast(cumsum(varlengths(house.model, house.paramcomps, house.parameters)) .< cc) + 1
-    rrrelative = rr - sum(varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)[1:varii-1])
-    ccrelative = cc - sum(varlengths(house.model, house.paramcomps, house.parameters)[1:parii-1])
-    vardims = getdims(house.model, house.constcomps[varii], get(house.constdictionary, house.constraints[varii], house.constraints[varii]))
+    varii = findlast(cumsum(varlengths(house.model, house.constcomps, house.constraints, house.namedictionary)) .< rr) + 1
+    parii = findlast(cumsum(varlengths(house.model, house.paramcomps, house.parameters, house.namedictionary)) .< cc) + 1
+    rrrelative = rr - sum(varlengths(house.model, house.constcomps, house.constraints, house.namedictionary)[1:varii-1])
+    ccrelative = cc - sum(varlengths(house.model, house.paramcomps, house.parameters, house.namedictionary)[1:parii-1])
+    vardims = getdims(house.model, house.constcomps[varii], get(house.namedictionary, house.constraints[varii], house.constraints[varii]))
     pardims = getdims(house.model, house.paramcomps[parii], house.parameters[parii])
 
     println("$(house.constcomps[varii]).$(house.constraints[varii])$(toindex(rrrelative, vardims)), $(house.paramcomps[parii]).$(house.parameters[parii])$(toindex(ccrelative, pardims)) = $(house.A[rr, cc])")
@@ -818,7 +822,7 @@ function constraining(house::LinearProgrammingHouse, solution::Vector{Float64}; 
     df[:belowfail] = ""
 
     # Produce names for all constraints
-    varlens = varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)
+    varlens = varlengths(house.model, house.constcomps, house.constraints, house.namedictionary)
     names = ["" for ii in 1:sum(varlens)]
     for kk in 1:length(house.constcomps)
         ii0 = sum(varlens[1:kk-1])
@@ -827,7 +831,7 @@ function constraining(house::LinearProgrammingHouse, solution::Vector{Float64}; 
         end
     end
 
-    varlens = varlengths(house.model, house.paramcomps, house.parameters)
+    varlens = varlengths(house.model, house.paramcomps, house.parameters, house.namedictionary)
     baseconsts = house.A * solution
 
     println("Ignore:")
@@ -934,7 +938,7 @@ end
 
 function summarizeparameters(house::LinearProgrammingHouse, solution::Vector{Float64})
     # Look at parameter values
-    varlens = varlengths(house.model, house.paramcomps, house.parameters)
+    varlens = varlengths(house.model, house.paramcomps, house.parameters, house.namedictionary)
     for ii in 1:length(house.parameters)
         println(house.parameters[ii])
         index1 = sum(varlens[1:ii-1]) + 1
@@ -957,7 +961,7 @@ end
 Return the array of solution values for a given parameter.
 """
 function getparametersolution(house::LinearProgrammingHouse, solution::Vector{Float64}, parameter::Symbol)
-    varlens = varlengths(house.model, house.paramcomps, house.parameters)
+    varlens = varlengths(house.model, house.paramcomps, house.parameters, house.namedictionary)
 
     ii = find(house.parameters .== parameter)[1]
 
@@ -975,7 +979,7 @@ Return the array of solution values for a given constraint.
 function getconstraintsolution(house, sol, constraint)
     constvalues = house.A * sol.sol
 
-    varlens = varlengths(house.model, house.constcomps, house.constraints, house.constdictionary)
+    varlens = varlengths(house.model, house.constcomps, house.constraints, house.namedictionary)
 
     ii = find(house.constraints .== constraint)[1]
 
