@@ -13,7 +13,7 @@ using BlackBoxOptim
 
 ##########
 
-type UncertainOptimizationProblem
+mutable struct UncertainOptimizationProblem
     model::Model
     components::Vector{Symbol}
     names::Vector{Symbol}
@@ -23,7 +23,7 @@ type UncertainOptimizationProblem
     uppers::Vector{Float64}
 end
 
-type UncertainOptimizationSolution
+mutable struct UncertainOptimizationSolution
     problem::UncertainOptimizationProblem
     fmean::Float64
     fserr::Float64

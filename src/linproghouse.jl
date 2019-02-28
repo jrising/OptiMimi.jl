@@ -1,6 +1,7 @@
 using MathProgBase
 using DataFrames
 using Clp
+using SparseArrays
 
 import Mimi.metainfo
 import Base.*, Base.-, Base.+, Base./, Base.max
@@ -27,7 +28,7 @@ the constraint offsets.
 * `name::Symbol`: Either a parameter or variable name.
 * `f::Vector{Float64}`: A vector of values, for every entry in the variable.
 """
-type LinearProgrammingHall
+mutable struct LinearProgrammingHall
     component::Symbol
     name::Symbol
     f::Vector{Float64}
@@ -148,7 +149,7 @@ Shaft, which then returns a Hall.
 * `name::Symbol`: Either a parameter or variable name.
 * `x::Vector{Float64}`: A vector of values, for every entry in the variable.
 """
-type LinearProgrammingShaft
+mutable struct LinearProgrammingShaft
     component::Symbol
     name::Symbol
     x::Vector{Float64}
@@ -202,7 +203,7 @@ indices.
 * `parameter::Symbol`: The parameter name.
 * `A::SparseMatrixCSC{Float64, Int64}`: A sparse matrix of values, for every combination of the parameter and variable.
 """
-type LinearProgrammingRoom
+mutable struct LinearProgrammingRoom
     varcomponent::Symbol
     variable::Symbol
     paramcomponent::Symbol
@@ -210,23 +211,27 @@ type LinearProgrammingRoom
     A::SparseMatrixCSC{Float64, Int64}
 end
 
-doc"""
+## Math to be incorporated below:
+# ```math
+# \begin{array}{ccc} p_1 & p_2 & \cdots \end{array}
+# ```
+# ```math
+# \begin{array}{c}
+#     v_1 \\
+#     v_2 \\
+#     \vdots
+#     \end{array}\left(\begin{array}{ccc}
+#         g(1) & 0 & \cdots \\
+#         0 & g(2) & \cdots \\
+#         \vdots & \vdots & \ddots
+#         \end{array}\right)
+# ```
+"""
     roomdiagonal(model, component, variable, parameter, gen)
 
-Fill in just the diagonal, assuming $\frac{dv_i}{dp_j} = 0$, if $i <>
-j$.  Requires that the dimensions of `variable` and `parameter` are
+Fill in just the diagonal, assuming ``\frac{dv_i}{dp_j} = 0``, if ``i <>
+j``.  Requires that the dimensions of `variable` and `parameter` are
 the same.  `gen` called for each combination of indices.
-
-$$\begin{array}{ccc} p_1 & p_2 & \cdots \end{array}$$
-$$\begin{array}{c}
-    v_1 \\
-    v_2 \\
-    \vdots
-    \end{array}\left(\begin{array}{ccc}
-        g(1) & 0 & \cdots \\
-        0 & g(2) & \cdots \\
-        \vdots & \vdots & \ddots
-        \end{array}\right)$$
 
 # Arguments
 * `model::Model`: The model containing `component`.
@@ -563,17 +568,22 @@ function discounted(model::Model, room::LinearProgrammingRoom, rate::Float64)
     LinearProgrammingRoom(room.varcomponent, room.variable, room.paramcomponent, room.parameter, discounted)
 end
 
-
-doc"""
+## Math to be incorporated below:
+# The linear programming that is solved is always:
+# ```math
+# \max f' x
+# ```
+# ```math
+# A x \le b
+# ```
+# ```math
+# x_{lower} \le x \le x_{upper}
+# ```
+"""
     LinearProgrammingHouse
 
 The full description of a linear programming problem, including all
 its variables, parameters, the constraints, and the objective.
-
-The linear programming that is solved is always:
-$$\max f' x$$
-$$A x \le b$$
-$$x_{lower} \le x \le x_{upper}$$
 
 # Fields
 * `model::Model`: The model containing all components
@@ -586,9 +596,9 @@ $$x_{lower} \le x \le x_{upper}$$
 * `uppers::Vector{Float64}`: The upper bound for each parameter.
 * `f::Vector{Float64}`: The derivative of the objective function for each parameter.
 * `A::SparseMatrixCSC{Float64, Int64}`: Each row describes the derivatives of a given row for each parameter.
-* `b::Vector{Float64}`: The maximum value for $A x$ for parameter values $x$.
+* `b::Vector{Float64}`: The maximum value for ``A x`` for parameter values ``x``.
 """
-type LinearProgrammingHouse
+mutable struct LinearProgrammingHouse
     model::Model
     paramcomps::Vector{Symbol}
     parameters::Vector{Symbol}
@@ -872,14 +882,14 @@ houseoptimize(house::LinearProgrammingHouse) = linprog(-house.f, house.A, '<', h
 houseoptimize(house::LinearProgrammingHouse, solver) = linprog(-house.f, house.A, '<', house.b, house.lowers, house.uppers, solver)
 houseoptimize(house::LinearProgrammingHouse, solver, subset::Vector{Int64}) = linprog(-house.f, house.A[subset, :], '<', house.b[subset], house.lowers, house.uppers, solver)
 
-doc"""
+"""
     findinfeasiblepair(house, solver)
 
 Finds a range within the matrix for which the results become minimally
 infeasible.  In other words, suppose that the full linear programming
-matrix is $A$.  It returns $i$, $j$, such that $A[1:i, :]$ is
-infeasible, but $A[1:i-1, :]$ is not, and $A[j:end, :]$ is infeasible
-but $A[j-1:end, :]$ is not.
+matrix is ``A``.  It returns ``i``, ``j``, such that ``A[1:i, :]`` is
+infeasible, but ``A[1:i-1, :]`` is not, and ``A[j:end, :]`` is infeasible
+but ``A[j-1:end, :]`` is not.
 
 # Arguments
 * `house::LinearProgrammingHouse`: An infeasible LinearProgrammingHouse.
@@ -1172,29 +1182,20 @@ function vectorsingle(dims::Vector{Int64}, gen::Function, dupover::Vector{Bool})
     repeat(f, inner=[dupinner], outer=[dupouter])
 end
 
-doc"""
+## Example to be included below:
+# # Examples
+# ```jldoctest
+# using OptiMimi
+
+# dims = [3, 2]
+# A = OptiMimi.matrixdiagonal(dims, (ii, jj) -> 1)
+# sum(A)
+
+# # output
+# 6.0
+# ```
+"""
     matrixdiagonal(dims, gen)
-
-Creates a matrix of dimensions $\prod \text{dims}_i$.  Call the
-generate function, `gen` for all indices along the diagonal.  All
-combinations of indices will be called, since the "diagonal" part is
-between the rows and the columns.
-
-# Arguments
-* `dims::Vector{Int64}`: The multiple dimensions collapsed into both the rows and columns.
-* `gen::Function`: A function called with an argument for each dimension.
-
-# Examples
-```jldoctest
-using OptiMimi
-
-dims = [3, 2]
-A = OptiMimi.matrixdiagonal(dims, (ii, jj) -> 1)
-sum(A)
-
-# output
-6.0
-```
 """
 function matrixdiagonal(dims::Vector{Int64}, gen::Function)
     dimlen = prod(dims)

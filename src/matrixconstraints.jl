@@ -1,6 +1,7 @@
 export savelpconstraints, MatrixConstraintSet
+using SparseArrays
 
-type MatrixConstraintSet
+mutable struct MatrixConstraintSet
     components::Vector{Symbol}
     names::Vector{Symbol}
     lowers::Vector{Float64}

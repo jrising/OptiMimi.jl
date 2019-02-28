@@ -3,7 +3,6 @@ module OptiMimi
 using NLopt
 using ForwardDiff, DiffResults
 using MathProgBase
-using Compat
 
 import Mimi: Model
 
@@ -19,7 +18,7 @@ include("uncertainty.jl")
 allverbose = false
 objevals = 0
 
-type OptimizationProblem
+mutable struct OptimizationProblem
     model::Model
     components::Vector{Symbol}
     names::Vector{Symbol}
@@ -27,7 +26,7 @@ type OptimizationProblem
     constraints::Vector{Function}
 end
 
-type BlackBoxOptimizationProblem{T}
+mutable struct BlackBoxOptimizationProblem{T}
     algorithm::Symbol
     model::Model
     components::Vector{Symbol}
@@ -37,7 +36,7 @@ type BlackBoxOptimizationProblem{T}
     uppers::Vector{T}
 end
 
-type LinprogOptimizationProblem{T}
+mutable struct LinprogOptimizationProblem{T}
     model::Model
     components::Vector{Symbol}
     names::Vector{Symbol}
@@ -145,7 +144,7 @@ function make0(model::Model, components::Vector{Symbol}, names::Vector{Symbol})
 end
 
 """Expand parameter constraints to full vectors for every numerical parameter."""
-function expandlimits{T<:Real}(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T})
+function expandlimits(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}) where T <: Real
     my_lowers = T[]
     my_uppers = T[]
 
@@ -161,7 +160,7 @@ function expandlimits{T<:Real}(model::Model, components::Vector{Symbol}, names::
 end
 
 """Setup an optimization problem."""
-function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}, objective::Function; constraints::Vector{Function}=Function[], algorithm::Symbol=:LN_COBYLA_OR_LD_MMA)
+function problem(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}, objective::Function; constraints::Vector{Function}=Function[], algorithm::Symbol=:LN_COBYLA_OR_LD_MMA) where T <: Real
     my_lowers, my_uppers, totalvars = expandlimits(model, components, names, lowers, uppers)
 
     if algorithm == :GUROBI_LINPROG
@@ -288,7 +287,7 @@ end
 
 
 """Setup an optimization problem."""
-function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}, objective::Function, objectiveconstraints::Vector{Function}, matrixconstraints::Vector{MatrixConstraintSet})
+function problem(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}, objective::Function, objectiveconstraints::Vector{Function}, matrixconstraints::Vector{MatrixConstraintSet}) where T <: Real
     my_lowers, my_uppers, totalvars = expandlimits(model, components, names, lowers, uppers)
     LinprogOptimizationProblem(model, components, names, objective, objectiveconstraints, matrixconstraints, my_lowers, my_uppers)
 end

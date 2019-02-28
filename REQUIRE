@@ -1,11 +1,13 @@
-julia 0.6
-Mimi
+julia 0.7
+Mimi 0.6
 NLopt
 ForwardDiff 0.2.5
 DiffBase
+DiffResults
 MathProgBase
 DataFrames
 Clp
 GeneticAlgorithms
 Distributions
 BlackBoxOptim
+SparseArrays
