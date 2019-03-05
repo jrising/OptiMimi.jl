@@ -7,6 +7,5 @@ DiffResults
 MathProgBase
 DataFrames
 Clp
-GeneticAlgorithms
 Distributions
 BlackBoxOptim
