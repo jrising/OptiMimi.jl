@@ -3,7 +3,6 @@ using DataFrames
 using Clp
 using SparseArrays
 
-import Mimi.metainfo
 import Base.*, Base.-, Base.+, Base./, Base.max
 
 export LinearProgrammingHall, LinearProgrammingShaft, LinearProgrammingRoom, LinearProgrammingHouse
@@ -1089,18 +1088,6 @@ function expanddims(iis::Vector{Int64}, alldims::Vector{Int64}, newdims::Abstrac
     else
         newdims[insertat] = false
         return expanddims(iis2, alldims, newdims, newdimvalues[2:end])
-    end
-end
-
-"""
-Return the symbols representing each of the dimensions for this variable or parameter.
-"""
-function getdimnames(model::Model, component::Symbol, name::Symbol)
-    meta = metainfo.getallcomps()
-    if name in keys(meta[(:Main, component)].parameters)
-        convert(Vector{Symbol}, meta[(:Main, component)].parameters[name].dimensions)
-    else
-        convert(Vector{Symbol}, meta[(:Main, component)].variables[name].dimensions)
     end
 end
 
