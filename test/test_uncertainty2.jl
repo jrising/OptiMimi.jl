@@ -1,6 +1,6 @@
 using Mimi
 using OptiMimi
-using Base.Test
+using Test
 
 # Easier basic model to optimize:
 # Each period, you have 1 unit to divide between consuming and staving off disaster.

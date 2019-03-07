@@ -1,6 +1,6 @@
 using Mimi
 using OptiMimi
-using Base.Test
+using Test
 
 @defcomp Simple begin
     region = Index()

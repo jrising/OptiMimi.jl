@@ -1,6 +1,6 @@
 using Mimi
 using OptiMimi
-using Base.Test
+using Test
 
 # From http://www.purplemath.com/modules/linprog3.htm
 
