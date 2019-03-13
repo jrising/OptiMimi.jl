@@ -18,25 +18,25 @@ using Test
     office = Index()
 
     # Two kinds of cabinet: model X and Y
-    x = Parameter(index=[office, time])
-    y = Parameter(index=[office, time])
+    x = Parameter(index=[time, office])
+    y = Parameter(index=[time, office])
 
-    cost = Variable(index=[office, time])
-    space = Variable(index=[office, time])
-    volume = Variable(index=[office, time])
+    cost = Variable(index=[time, office])
+    space = Variable(index=[time, office])
+    volume = Variable(index=[time, office])
 end
 
 # Define all gradients
-grad_cabinets_cost_x(m::Model) = roomdiagonal(m, :Cabinets, :cost, :x, (ii, tt) -> 10)
-grad_cabinets_cost_y(m::Model) = roomdiagonal(m, :Cabinets, :cost, :y, (ii, tt) -> 20)
-grad_cabinets_space_x(m::Model) = roomdiagonal(m, :Cabinets, :space, :x, (ii, tt) -> 6)
-grad_cabinets_space_y(m::Model) = roomdiagonal(m, :Cabinets, :space, :y, (ii, tt) -> 8)
-grad_cabinets_volume_x(m::Model) = roomdiagonal(m, :Cabinets, :volume, :x, (ii, tt) -> 8)
-grad_cabinets_volume_y(m::Model) = roomdiagonal(m, :Cabinets, :volume, :y, (ii, tt) -> 12)
+grad_cabinets_cost_x(m::Model) = roomdiagonal(m, :Cabinets, :cost, :x, (tt, ii) -> 10)
+grad_cabinets_cost_y(m::Model) = roomdiagonal(m, :Cabinets, :cost, :y, (tt, ii) -> 20)
+grad_cabinets_space_x(m::Model) = roomdiagonal(m, :Cabinets, :space, :x, (tt, ii) -> 6)
+grad_cabinets_space_y(m::Model) = roomdiagonal(m, :Cabinets, :space, :y, (tt, ii) -> 8)
+grad_cabinets_volume_x(m::Model) = roomdiagonal(m, :Cabinets, :volume, :x, (tt, ii) -> 8)
+grad_cabinets_volume_y(m::Model) = roomdiagonal(m, :Cabinets, :volume, :y, (tt, ii) -> 12)
 
 # And the constraints
-constraintoffset_cabinets_cost(m::Model) = hallsingle(m, :Cabinets, :cost, (ii, tt) -> 140)
-constraintoffset_cabinets_space(m::Model) = hallsingle(m, :Cabinets, :space, (ii, tt) -> 72)
+constraintoffset_cabinets_cost(m::Model) = hallsingle(m, :Cabinets, :cost, (tt, ii) -> 140)
+constraintoffset_cabinets_space(m::Model) = hallsingle(m, :Cabinets, :space, (tt, ii) -> 72)
 
 # Create the model
 m = Model()
@@ -44,8 +44,8 @@ setindex(m, :time, [1])
 setindex(m, :office, collect(1:2))
 
 cabinets = addcomponent(m, Cabinets)
-cabinets[:x] = zeros(2, 1)
-cabinets[:y] = zeros(2, 1)
+cabinets[:x] = zeros(1, 2)
+cabinets[:y] = zeros(1, 2)
 
 # Create the constraint matrix
 paramcomps = [:Cabinets, :Cabinets]
