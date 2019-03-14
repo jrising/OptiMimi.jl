@@ -64,13 +64,13 @@ function grad_component(m::Model, component::Symbol, variable::Symbol, parameter
     LinearProgrammingRoom(component, variable, component, parameter, sparse(A))
 end
 
-function grad_component(indices::Dict{Symbol, Any}, addcomponent::Function, variable::Symbol, parameter::Symbol)
+function grad_component(indices::Dict{Symbol, Any}, add_comp!::Function, variable::Symbol, parameter::Symbol)
     m = Model(Real)
     for index in keys(indices)
-        setindex(m, index, indices[index])
+        set_dimension!(m, index, indices[index])
     end
 
-    addcomponent(m, :Singleton)
+    add_comp!(m, :Singleton)
     run(m) # Needs to be run for ModelInstance
 
     grad_component(m, :Singleton, variable, parameter)

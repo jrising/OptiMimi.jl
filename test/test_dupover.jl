@@ -9,10 +9,10 @@ using Test
 end
 
 m = Model()
-setindex(m, :region, collect(1:2))
-setindex(m, :time, collect(1:3))
+set_dimension!(m, :region, collect(1:2))
+set_dimension!(m, :time, collect(1:3))
 
-simple = addcomponent(m, Simple)
+simple = add_comp!(m, Simple)
 simple[:xx] = reshape(repeat([1, 2], inner=3), (3, 2))
 
 gen(rr) = m.external_parameters[:xx].values[rr, 1]

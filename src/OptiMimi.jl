@@ -68,11 +68,11 @@ function setparameters(model::Model, components::Vector{Symbol}, names::Vector{S
     startindex = 1
     for (ii, len, isscalar) in Channel((chnl) -> nameindexes(model, components, names, chnl))
         if isscalar
-            setparameter(model, components[ii], names[ii], xx[startindex])
+            set_param!(model, components[ii], names[ii], xx[startindex])
         else
             shape = getdims(model, components[ii], names[ii])
             reshaped = reshape(collect(model.numberType, xx[startindex:(startindex+len - 1)]), tuple(shape...))
-            setparameter(model, components[ii], names[ii], reshaped)
+            set_param!(model, components[ii], names[ii], reshaped)
         end
         startindex += len
     end

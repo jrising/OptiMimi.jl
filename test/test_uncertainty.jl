@@ -41,29 +41,26 @@ println(reverse(VV_reverse))
     utility = Variable(index=[time])
     disaster::Bool = Variable(index=[time])
     bonus = Variable()
-end
 
-function run_timestep(state::Bellmano, tt::Int64)
-    v = state.Variables
-    p = state.Parameters
-
-    v.bonus = 0
-    if tt == 1 || !v.disaster[tt-1]
-        v.utility[tt] = sqrt(p.consumption[tt])
-        v.disaster[tt] = rand() < p.consumption[tt]
-	if tt == 10 && !v.disaster[tt]
-	    v.bonus = 1
-	end
-    else
-        v.utility[tt] = 0
-        v.disaster[tt] = true
+    function run_timestep(p, v, d, t)
+        v.bonus = 0
+        if is_first(tt) || !v.disaster[tt-1]
+            v.utility[tt] = sqrt(p.consumption[tt])
+            v.disaster[tt] = rand() < p.consumption[tt]
+	    if tt == 10 && !v.disaster[tt]
+	        v.bonus = 1
+	    end
+        else
+            v.utility[tt] = 0
+            v.disaster[tt] = true
+        end
     end
 end
 
 m = Model()
-setindex(m, :time, collect(1:10))
+set_dimension!(m, :time, collect(1:10))
 
-bellmano = addcomponent(m, Bellmano)
+bellmano = add_comp!(m, Bellmano)
 bellmano[:consumption] = repmat([.25], 10)
 
 run(m)

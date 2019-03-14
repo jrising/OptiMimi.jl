@@ -40,10 +40,10 @@ constraintoffset_cabinets_space(m::Model) = hallsingle(m, :Cabinets, :space, (tt
 
 # Create the model
 m = Model()
-setindex(m, :time, [1])
-setindex(m, :office, collect(1:2))
+set_dimension!(m, :time, [1])
+set_dimension!(m, :office, collect(1:2))
 
-cabinets = addcomponent(m, Cabinets)
+cabinets = add_comp!(m, Cabinets)
 cabinets[:x] = zeros(1, 2)
 cabinets[:y] = zeros(1, 2)
 
