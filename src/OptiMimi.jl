@@ -71,7 +71,7 @@ function setparameters(model::Model, components::Vector{Symbol}, names::Vector{S
             set_param!(model, components[ii], names[ii], xx[startindex])
         else
             shape = getdims(model, components[ii], names[ii])
-            reshaped = reshape(collect(model.numberType, xx[startindex:(startindex+len - 1)]), tuple(shape...))
+            reshaped = reshape(collect(model.md.number_type, xx[startindex:(startindex+len - 1)]), tuple(shape...))
             set_param!(model, components[ii], names[ii], reshaped)
         end
         startindex += len
@@ -165,7 +165,7 @@ function problem(model::Model, components::Vector{Symbol}, names::Vector{Symbol}
 
     if algorithm == :GUROBI_LINPROG
         # Make no changes to objective!
-    elseif model.numberType == Number
+    elseif model.md.number_type == Number
         if algorithm == :LN_COBYLA_OR_LD_MMA
             algorithm = :LD_MMA
         end
@@ -303,7 +303,7 @@ function solution(optprob::LinprogOptimizationProblem, verbose=false)
         println("Optimizing...")
     end
 
-    if optprob.model.numberType == Number
+    if optprob.model.md.number_type == Number
         myobjective = unaryobjective(optprob.model, optprob.components, optprob.names, optprob.objective)
         f, b, A = lpconstraints(optprob.model, optprob.components, optprob.names, myobjective, objectiveconstraints)
     else
