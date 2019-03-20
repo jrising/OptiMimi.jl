@@ -517,7 +517,7 @@ Construct a hall from a room by summing over rows.
         This is equivalent to a constraint for the sum of the variables in the original room.
 """
 function varsum(room::LinearProgrammingRoom)
-    LinearProgrammingHall(room.paramcomponent, room.parameter, vec(sum(room.A, 1)))
+    LinearProgrammingHall(room.paramcomponent, room.parameter, vec(sum(room.A, dims=1)))
 end
 
 function varsum(room::LinearProgrammingRoom, axis::Int64, model::Model, newvar::Symbol)
@@ -844,7 +844,7 @@ function constraining(house::LinearProgrammingHouse, solution::Vector{Float64}; 
     baseconsts = house.A * solution
 
     println("Ignore:")
-    println(join(names[find(baseconsts .> house.b)], ", "))
+    println(join(names[findall(baseconsts .> house.b)], ", "))
     ignore = baseconsts .> house.b
 
     if subset == []
@@ -856,10 +856,10 @@ function constraining(house::LinearProgrammingHouse, solution::Vector{Float64}; 
                 df[ii0 + ii, :parameter] = house.parameters[kk]
 
                 newconst = baseconsts + house.A[:, ii0 + ii] * 1e-6 + (house.A[:, ii0 + ii] .> 0) * 1e-6
-                df[ii0 + ii, :abovefail] = join(names[find((newconst .> house.b) .& .!ignore)], ", ")
+                df[ii0 + ii, :abovefail] = join(names[findall((newconst .> house.b) .& .!ignore)], ", ")
 
                 newconst = baseconsts - house.A[:, ii0 + ii] * 1e-6 - (house.A[:, ii0 + ii] .> 0) * 1e-6
-                df[ii0 + ii, :belowfail] = join(names[find((newconst .> house.b) .& .!ignore)], ", ")
+                df[ii0 + ii, :belowfail] = join(names[findall((newconst .> house.b) .& .!ignore)], ", ")
             end
         end
     else
@@ -867,10 +867,10 @@ function constraining(house::LinearProgrammingHouse, solution::Vector{Float64}; 
             println(ii / length(subset))
 
             newconst = baseconsts + house.A[:, subset[ii]] * 1e-6 + 1e-6
-            df[ii, :abovefail] = join(names[find((newconst .> house.b) .& !ignore)], ", ")
+            df[ii, :abovefail] = join(names[findall((newconst .> house.b) .& !ignore)], ", ")
 
             newconst = baseconsts - house.A[:, subset[ii]] * 1e-6 - 1e-6
-            df[ii, :belowfail] = join(names[find((newconst .> house.b) .& !ignore)], ", ")
+            df[ii, :belowfail] = join(names[findall((newconst .> house.b) .& !ignore)], ", ")
         end
     end
 
@@ -972,7 +972,7 @@ Return the array of solution values for a given parameter.
 function getparametersolution(house::LinearProgrammingHouse, solution::Vector{Float64}, parameter::Symbol)
     varlens = varlengths(house.model, house.paramcomps, house.parameters, house.namedictionary)
 
-    ii = find(house.parameters .== parameter)[1]
+    ii = findall(house.parameters .== parameter)[1]
 
     index1 = sum(varlens[1:ii-1]) + 1
     index2 = sum(varlens[1:ii])
@@ -990,7 +990,7 @@ function getconstraintsolution(house, sol, constraint)
 
     varlens = varlengths(house.model, house.constcomps, house.constraints, house.namedictionary)
 
-    ii = find(house.constraints .== constraint)[1]
+    ii = findall(house.constraints .== constraint)[1]
 
     index1 = sum(varlens[1:ii-1]) + 1
     index2 = sum(varlens[1:ii])
@@ -1012,7 +1012,7 @@ Translate an offset value (+1) to an index vector.
 This faster if dims is a vector.  Use ind2sub if dims is tuple.
 """
 function toindex(ii::Int64, dims::Vector{Int64})
-    indexes = Vector{Int64}(length(dims))
+    indexes = Vector{Int64}(undef, length(dims))
     offset = ii - 1
     for dd in 1:length(dims)
         indexes[dd] = offset % dims[dd] + 1
@@ -1026,7 +1026,7 @@ end
 As `toindex`, but for many iis.  Ruturns N x D
 """
 function toindexes(iis::Vector{Int64}, dims::Vector{Int64})
-    indexes = Matrix{Int64}(length(iis), length(dims))
+    indexes = Matrix{Int64}(undef, length(iis), length(dims))
     offsets = iis - 1
     for dd in 1:length(dims)
         indexes[:, dd] = offsets .% dims[dd] + 1
@@ -1144,7 +1144,7 @@ end
 
 "Construct a vector of values corresponding to entries in a matrix with the given dimensions, calling gen for each element."
 function vectorsingle(dims::Vector{Int64}, gen::Function)
-    f = Vector{Float64}(prod(dims))
+    f = Vector{Float64}(undef, prod(dims))
     for ii in 1:length(f)
         f[ii] = gen(toindex(ii, dims)...)
     end
@@ -1161,7 +1161,7 @@ function vectorsingle(dims::Vector{Int64}, gen::Function, dupover::Vector{Bool})
     dupouter = prod(dims[outers])
     dupinner = prod(dims[inners])
 
-    f = Vector{Float64}(prod(dims[.!dupover]))
+    f = Vector{Float64}(undef, prod(dims[.!dupover]))
     for ii in 1:length(f)
         f[ii] = gen(toindex(ii, dims[.!dupover])...)
     end

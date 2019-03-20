@@ -1,5 +1,5 @@
 julia 0.7
-Mimi 0.6
+Mimi
 NLopt
 ForwardDiff 0.2.5
 DiffBase
