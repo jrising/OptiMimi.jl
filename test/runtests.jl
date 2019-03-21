@@ -1,12 +1,12 @@
+## Ensure master version of Mimi
+using Pkg
+Pkg.add(PackageSpec(name="Mimi", rev="master"))
+
 using Mimi
 using OptiMimi
 using Test
 
 using ForwardDiff
-
-## Ensure master version of Mimi
-using Pkg
-Pkg.add(PackageSpec(name="Mimi", rev="master"))
 
 include("testlp.jl")
 
