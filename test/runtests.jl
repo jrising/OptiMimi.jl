@@ -25,7 +25,7 @@ include("testlp.jl")
     value = Variable(index=[regions])
 
     function run_timestep(p, v, d, t)
-        v.value = -(p.input - p.maximum).^2
+        v.value[:] = -(p.input - p.maximum).^2
     end
 end
 
@@ -62,7 +62,7 @@ optprob = problem(model1, [:quad1], [:input], [0.], [100.0], objective1)
     value = Variable(index=[regions])
 
     function run_timestep(p, v, d, t)
-        v.value = -(p.input - p.maximum).^2
+        v.value[:] = -(p.input - p.maximum).^2
     end
 end
 
