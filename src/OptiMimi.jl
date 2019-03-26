@@ -126,7 +126,7 @@ function autodiffobjective(model::Model, components::Vector{Symbol}, names::Vect
         if any(isnan.(DiffResults.gradient(out)))
             error("objective gradient is NaN")
         end
-        copy!(grad, DiffResults.gradient(out))
+        grad[:] = DiffResults.gradient(out)
         DiffResults.value(out)
     end
 

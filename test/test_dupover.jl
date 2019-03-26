@@ -13,7 +13,8 @@ set_dimension!(m, :region, collect(1:2))
 set_dimension!(m, :time, collect(1:3))
 
 simple = add_comp!(m, Simple)
-simple[:xx] = reshape(repeat([1, 2], inner=3), (3, 2))
+xx = reshape(repeat([1, 2], inner=3), (3, 2))
+simple[:xx] = xx
 
 gen(rr) = m.md.external_params[:xx].values[rr, 1]
 hall = hallsingle(m, :Simple, :xx, gen, [:time])
