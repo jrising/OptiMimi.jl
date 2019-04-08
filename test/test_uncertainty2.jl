@@ -1,6 +1,6 @@
 using Mimi
 using OptiMimi
-using Base.Test
+using Test
 
 # Easier basic model to optimize:
 # Each period, you have 1 unit to divide between consuming and staving off disaster.
@@ -22,25 +22,22 @@ gamma = exp(-.05) # 5% discount rate
 
     # The y-value of the quadratic at the x-value
     utility = Variable(index=[time])
-end
 
-function run_timestep(state::Bellmano, tt::Int64)
-    v = state.Variables
-    p = state.Parameters
+    function run_timestep(p, v, d, t)
+        #v.utility[tt] = sqrt(p.consumption[tt]) * (1 - p.consumption[tt])
 
-    #v.utility[tt] = sqrt(p.consumption[tt]) * (1 - p.consumption[tt])
-
-    if rand() < p.consumption[tt]
-        v.utility[tt] = 0
-    else
-        v.utility[tt] = sqrt(max(0, p.consumption[tt]))
+        if rand() < p.consumption[tt]
+            v.utility[tt] = 0
+        else
+            v.utility[tt] = sqrt(max(0, p.consumption[tt]))
+        end
     end
 end
 
 m = Model()
-setindex(m, :time, collect(1:10))
+set_dimension!(m, :time, collect(1:10))
 
-bellmano = addcomponent(m, Bellmano)
+bellmano = add_comp!(m, Bellmano)
 bellmano[:consumption] = repmat([.25], 10)
 
 run(m)

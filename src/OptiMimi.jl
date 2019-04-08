@@ -3,7 +3,6 @@ module OptiMimi
 using NLopt
 using ForwardDiff, DiffResults
 using MathProgBase
-using Compat
 
 import Mimi: Model
 
@@ -19,7 +18,7 @@ include("uncertainty.jl")
 allverbose = false
 objevals = 0
 
-type OptimizationProblem
+mutable struct OptimizationProblem
     model::Model
     components::Vector{Symbol}
     names::Vector{Symbol}
@@ -27,7 +26,7 @@ type OptimizationProblem
     constraints::Vector{Function}
 end
 
-type BlackBoxOptimizationProblem{T}
+mutable struct BlackBoxOptimizationProblem{T}
     algorithm::Symbol
     model::Model
     components::Vector{Symbol}
@@ -37,7 +36,7 @@ type BlackBoxOptimizationProblem{T}
     uppers::Vector{T}
 end
 
-type LinprogOptimizationProblem{T}
+mutable struct LinprogOptimizationProblem{T}
     model::Model
     components::Vector{Symbol}
     names::Vector{Symbol}
@@ -69,11 +68,11 @@ function setparameters(model::Model, components::Vector{Symbol}, names::Vector{S
     startindex = 1
     for (ii, len, isscalar) in Channel((chnl) -> nameindexes(model, components, names, chnl))
         if isscalar
-            setparameter(model, components[ii], names[ii], xx[startindex])
+            set_param!(model, components[ii], names[ii], xx[startindex])
         else
             shape = getdims(model, components[ii], names[ii])
-            reshaped = reshape(collect(model.numberType, xx[startindex:(startindex+len - 1)]), tuple(shape...))
-            setparameter(model, components[ii], names[ii], reshaped)
+            reshaped = reshape(collect(model.md.number_type, xx[startindex:(startindex+len - 1)]), tuple(shape...))
+            set_param!(model, components[ii], names[ii], reshaped)
         end
         startindex += len
     end
@@ -127,7 +126,7 @@ function autodiffobjective(model::Model, components::Vector{Symbol}, names::Vect
         if any(isnan.(DiffResults.gradient(out)))
             error("objective gradient is NaN")
         end
-        copy!(grad, DiffResults.gradient(out))
+        grad[:] = DiffResults.gradient(out)
         DiffResults.value(out)
     end
 
@@ -145,7 +144,7 @@ function make0(model::Model, components::Vector{Symbol}, names::Vector{Symbol})
 end
 
 """Expand parameter constraints to full vectors for every numerical parameter."""
-function expandlimits{T<:Real}(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T})
+function expandlimits(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}) where T <: Real
     my_lowers = T[]
     my_uppers = T[]
 
@@ -161,12 +160,12 @@ function expandlimits{T<:Real}(model::Model, components::Vector{Symbol}, names::
 end
 
 """Setup an optimization problem."""
-function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}, objective::Function; constraints::Vector{Function}=Function[], algorithm::Symbol=:LN_COBYLA_OR_LD_MMA)
+function problem(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}, objective::Function; constraints::Vector{Function}=Function[], algorithm::Symbol=:LN_COBYLA_OR_LD_MMA) where T <: Real
     my_lowers, my_uppers, totalvars = expandlimits(model, components, names, lowers, uppers)
 
     if algorithm == :GUROBI_LINPROG
         # Make no changes to objective!
-    elseif model.numberType == Number
+    elseif model.md.number_type == Number
         if algorithm == :LN_COBYLA_OR_LD_MMA
             algorithm = :LD_MMA
         end
@@ -288,7 +287,7 @@ end
 
 
 """Setup an optimization problem."""
-function problem{T<:Real}(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}, objective::Function, objectiveconstraints::Vector{Function}, matrixconstraints::Vector{MatrixConstraintSet})
+function problem(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}, objective::Function, objectiveconstraints::Vector{Function}, matrixconstraints::Vector{MatrixConstraintSet}) where T <: Real
     my_lowers, my_uppers, totalvars = expandlimits(model, components, names, lowers, uppers)
     LinprogOptimizationProblem(model, components, names, objective, objectiveconstraints, matrixconstraints, my_lowers, my_uppers)
 end
@@ -304,7 +303,7 @@ function solution(optprob::LinprogOptimizationProblem, verbose=false)
         println("Optimizing...")
     end
 
-    if optprob.model.numberType == Number
+    if optprob.model.md.number_type == Number
         myobjective = unaryobjective(optprob.model, optprob.components, optprob.names, optprob.objective)
         f, b, A = lpconstraints(optprob.model, optprob.components, optprob.names, myobjective, objectiveconstraints)
     else

@@ -1,6 +1,10 @@
+## Ensure master version of Mimi
+using Pkg
+Pkg.add(PackageSpec(name="Mimi", rev="master"))
+
 using Mimi
 using OptiMimi
-using Base.Test
+using Test
 
 using ForwardDiff
 
@@ -19,22 +23,19 @@ include("testlp.jl")
 
     # The y-value of the quadratic at the x-value
     value = Variable(index=[regions])
-end
 
-function run_timestep(state::quad1, t)
-    v = state.Variables
-    p = state.Parameters
-
-    v.value = -(p.input - p.maximum).^2
+    function run_timestep(p, v, d, t)
+        v.value[:] = -(p.input - p.maximum).^2
+    end
 end
 
 # Prepare model
 model1 = Model()
-setindex(model1, :time, 1)
-setindex(model1, :regions, 2)
-addcomponent(model1, quad1)
-setparameter(model1, :quad1, :maximum, [2., 10.])
-setparameter(model1, :quad1, :input, [0., 0.])
+set_dimension!(model1, :time, 1)
+set_dimension!(model1, :regions, 2)
+add_comp!(model1, quad1)
+set_param!(model1, :quad1, :maximum, [2., 10.])
+set_param!(model1, :quad1, :input, [0., 0.])
 
 objective1(model::Model) = sum(model[:quad1, :value])
 
@@ -59,22 +60,19 @@ optprob = problem(model1, [:quad1], [:input], [0.], [100.0], objective1)
 
     # The y-value of the quadratic at the x-value
     value = Variable(index=[regions])
-end
 
-function run_timestep(state::quad2, t)
-    v = state.Variables
-    p = state.Parameters
-
-    v.value = -(p.input - p.maximum).^2
+    function run_timestep(p, v, d, t)
+        v.value[:] = -(p.input - p.maximum).^2
+    end
 end
 
 # Prepare model
 model2 = Model(Number)
-setindex(model2, :time, 1)
-setindex(model2, :regions, 2)
-addcomponent(model2, quad2)
-setparameter(model2, :quad2, :maximum, convert(Array{Number,1}, [2., 10.]))
-setparameter(model2, :quad2, :input, convert(Array{Number,1}, [0., 0.]))
+set_dimension!(model2, :time, 1)
+set_dimension!(model2, :regions, 2)
+add_comp!(model2, quad2)
+set_param!(model2, :quad2, :maximum, convert(Array{Number,1}, [2., 10.]))
+set_param!(model2, :quad2, :input, convert(Array{Number,1}, [0., 0.]))
 
 objective2(model::Model) = sum(model[:quad2, :value])
 

@@ -1,4 +1,4 @@
-type RegisterGradient
+mutable struct RegisterGradient
     libeval::Function
 
     dx::Float64

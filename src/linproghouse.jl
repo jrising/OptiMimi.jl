@@ -1,8 +1,8 @@
 using MathProgBase
 using DataFrames
 using Clp
+using SparseArrays
 
-import Mimi.metainfo
 import Base.*, Base.-, Base.+, Base./, Base.max
 
 export LinearProgrammingHall, LinearProgrammingShaft, LinearProgrammingRoom, LinearProgrammingHouse
@@ -27,7 +27,7 @@ the constraint offsets.
 * `name::Symbol`: Either a parameter or variable name.
 * `f::Vector{Float64}`: A vector of values, for every entry in the variable.
 """
-type LinearProgrammingHall
+mutable struct LinearProgrammingHall
     component::Symbol
     name::Symbol
     f::Vector{Float64}
@@ -148,7 +148,7 @@ Shaft, which then returns a Hall.
 * `name::Symbol`: Either a parameter or variable name.
 * `x::Vector{Float64}`: A vector of values, for every entry in the variable.
 """
-type LinearProgrammingShaft
+mutable struct LinearProgrammingShaft
     component::Symbol
     name::Symbol
     x::Vector{Float64}
@@ -202,7 +202,7 @@ indices.
 * `parameter::Symbol`: The parameter name.
 * `A::SparseMatrixCSC{Float64, Int64}`: A sparse matrix of values, for every combination of the parameter and variable.
 """
-type LinearProgrammingRoom
+mutable struct LinearProgrammingRoom
     varcomponent::Symbol
     variable::Symbol
     paramcomponent::Symbol
@@ -210,23 +210,27 @@ type LinearProgrammingRoom
     A::SparseMatrixCSC{Float64, Int64}
 end
 
-doc"""
+## Math to be incorporated below:
+# ```math
+# \begin{array}{ccc} p_1 & p_2 & \cdots \end{array}
+# ```
+# ```math
+# \begin{array}{c}
+#     v_1 \\
+#     v_2 \\
+#     \vdots
+#     \end{array}\left(\begin{array}{ccc}
+#         g(1) & 0 & \cdots \\
+#         0 & g(2) & \cdots \\
+#         \vdots & \vdots & \ddots
+#         \end{array}\right)
+# ```
+"""
     roomdiagonal(model, component, variable, parameter, gen)
 
-Fill in just the diagonal, assuming $\frac{dv_i}{dp_j} = 0$, if $i <>
-j$.  Requires that the dimensions of `variable` and `parameter` are
+Fill in just the diagonal, assuming ``\frac{dv_i}{dp_j} = 0``, if ``i <>
+j``.  Requires that the dimensions of `variable` and `parameter` are
 the same.  `gen` called for each combination of indices.
-
-$$\begin{array}{ccc} p_1 & p_2 & \cdots \end{array}$$
-$$\begin{array}{c}
-    v_1 \\
-    v_2 \\
-    \vdots
-    \end{array}\left(\begin{array}{ccc}
-        g(1) & 0 & \cdots \\
-        0 & g(2) & \cdots \\
-        \vdots & \vdots & \ddots
-        \end{array}\right)$$
 
 # Arguments
 * `model::Model`: The model containing `component`.
@@ -513,7 +517,7 @@ Construct a hall from a room by summing over rows.
         This is equivalent to a constraint for the sum of the variables in the original room.
 """
 function varsum(room::LinearProgrammingRoom)
-    LinearProgrammingHall(room.paramcomponent, room.parameter, vec(sum(room.A, 1)))
+    LinearProgrammingHall(room.paramcomponent, room.parameter, vec(sum(room.A, dims=1)))
 end
 
 function varsum(room::LinearProgrammingRoom, axis::Int64, model::Model, newvar::Symbol)
@@ -563,17 +567,22 @@ function discounted(model::Model, room::LinearProgrammingRoom, rate::Float64)
     LinearProgrammingRoom(room.varcomponent, room.variable, room.paramcomponent, room.parameter, discounted)
 end
 
-
-doc"""
+## Math to be incorporated below:
+# The linear programming that is solved is always:
+# ```math
+# \max f' x
+# ```
+# ```math
+# A x \le b
+# ```
+# ```math
+# x_{lower} \le x \le x_{upper}
+# ```
+"""
     LinearProgrammingHouse
 
 The full description of a linear programming problem, including all
 its variables, parameters, the constraints, and the objective.
-
-The linear programming that is solved is always:
-$$\max f' x$$
-$$A x \le b$$
-$$x_{lower} \le x \le x_{upper}$$
 
 # Fields
 * `model::Model`: The model containing all components
@@ -586,9 +595,9 @@ $$x_{lower} \le x \le x_{upper}$$
 * `uppers::Vector{Float64}`: The upper bound for each parameter.
 * `f::Vector{Float64}`: The derivative of the objective function for each parameter.
 * `A::SparseMatrixCSC{Float64, Int64}`: Each row describes the derivatives of a given row for each parameter.
-* `b::Vector{Float64}`: The maximum value for $A x$ for parameter values $x$.
+* `b::Vector{Float64}`: The maximum value for ``A x`` for parameter values ``x``.
 """
-type LinearProgrammingHouse
+mutable struct LinearProgrammingHouse
     model::Model
     paramcomps::Vector{Symbol}
     parameters::Vector{Symbol}
@@ -835,7 +844,7 @@ function constraining(house::LinearProgrammingHouse, solution::Vector{Float64}; 
     baseconsts = house.A * solution
 
     println("Ignore:")
-    println(join(names[find(baseconsts .> house.b)], ", "))
+    println(join(names[findall(baseconsts .> house.b)], ", "))
     ignore = baseconsts .> house.b
 
     if subset == []
@@ -847,10 +856,10 @@ function constraining(house::LinearProgrammingHouse, solution::Vector{Float64}; 
                 df[ii0 + ii, :parameter] = house.parameters[kk]
 
                 newconst = baseconsts + house.A[:, ii0 + ii] * 1e-6 + (house.A[:, ii0 + ii] .> 0) * 1e-6
-                df[ii0 + ii, :abovefail] = join(names[find((newconst .> house.b) .& .!ignore)], ", ")
+                df[ii0 + ii, :abovefail] = join(names[findall((newconst .> house.b) .& .!ignore)], ", ")
 
                 newconst = baseconsts - house.A[:, ii0 + ii] * 1e-6 - (house.A[:, ii0 + ii] .> 0) * 1e-6
-                df[ii0 + ii, :belowfail] = join(names[find((newconst .> house.b) .& .!ignore)], ", ")
+                df[ii0 + ii, :belowfail] = join(names[findall((newconst .> house.b) .& .!ignore)], ", ")
             end
         end
     else
@@ -858,10 +867,10 @@ function constraining(house::LinearProgrammingHouse, solution::Vector{Float64}; 
             println(ii / length(subset))
 
             newconst = baseconsts + house.A[:, subset[ii]] * 1e-6 + 1e-6
-            df[ii, :abovefail] = join(names[find((newconst .> house.b) .& !ignore)], ", ")
+            df[ii, :abovefail] = join(names[findall((newconst .> house.b) .& !ignore)], ", ")
 
             newconst = baseconsts - house.A[:, subset[ii]] * 1e-6 - 1e-6
-            df[ii, :belowfail] = join(names[find((newconst .> house.b) .& !ignore)], ", ")
+            df[ii, :belowfail] = join(names[findall((newconst .> house.b) .& !ignore)], ", ")
         end
     end
 
@@ -872,14 +881,14 @@ houseoptimize(house::LinearProgrammingHouse) = linprog(-house.f, house.A, '<', h
 houseoptimize(house::LinearProgrammingHouse, solver) = linprog(-house.f, house.A, '<', house.b, house.lowers, house.uppers, solver)
 houseoptimize(house::LinearProgrammingHouse, solver, subset::Vector{Int64}) = linprog(-house.f, house.A[subset, :], '<', house.b[subset], house.lowers, house.uppers, solver)
 
-doc"""
+"""
     findinfeasiblepair(house, solver)
 
 Finds a range within the matrix for which the results become minimally
 infeasible.  In other words, suppose that the full linear programming
-matrix is $A$.  It returns $i$, $j$, such that $A[1:i, :]$ is
-infeasible, but $A[1:i-1, :]$ is not, and $A[j:end, :]$ is infeasible
-but $A[j-1:end, :]$ is not.
+matrix is ``A``.  It returns ``i``, ``j``, such that ``A[1:i, :]`` is
+infeasible, but ``A[1:i-1, :]`` is not, and ``A[j:end, :]`` is infeasible
+but ``A[j-1:end, :]`` is not.
 
 # Arguments
 * `house::LinearProgrammingHouse`: An infeasible LinearProgrammingHouse.
@@ -963,7 +972,7 @@ Return the array of solution values for a given parameter.
 function getparametersolution(house::LinearProgrammingHouse, solution::Vector{Float64}, parameter::Symbol)
     varlens = varlengths(house.model, house.paramcomps, house.parameters, house.namedictionary)
 
-    ii = find(house.parameters .== parameter)[1]
+    ii = findall(house.parameters .== parameter)[1]
 
     index1 = sum(varlens[1:ii-1]) + 1
     index2 = sum(varlens[1:ii])
@@ -981,7 +990,7 @@ function getconstraintsolution(house, sol, constraint)
 
     varlens = varlengths(house.model, house.constcomps, house.constraints, house.namedictionary)
 
-    ii = find(house.constraints .== constraint)[1]
+    ii = findall(house.constraints .== constraint)[1]
 
     index1 = sum(varlens[1:ii-1]) + 1
     index2 = sum(varlens[1:ii])
@@ -1003,7 +1012,7 @@ Translate an offset value (+1) to an index vector.
 This faster if dims is a vector.  Use ind2sub if dims is tuple.
 """
 function toindex(ii::Int64, dims::Vector{Int64})
-    indexes = Vector{Int64}(length(dims))
+    indexes = Vector{Int64}(undef, length(dims))
     offset = ii - 1
     for dd in 1:length(dims)
         indexes[dd] = offset % dims[dd] + 1
@@ -1017,7 +1026,7 @@ end
 As `toindex`, but for many iis.  Ruturns N x D
 """
 function toindexes(iis::Vector{Int64}, dims::Vector{Int64})
-    indexes = Matrix{Int64}(length(iis), length(dims))
+    indexes = Matrix{Int64}(undef, length(iis), length(dims))
     offsets = iis - 1
     for dd in 1:length(dims)
         indexes[:, dd] = offsets .% dims[dd] + 1
@@ -1082,18 +1091,6 @@ function expanddims(iis::Vector{Int64}, alldims::Vector{Int64}, newdims::Abstrac
     end
 end
 
-"""
-Return the symbols representing each of the dimensions for this variable or parameter.
-"""
-function getdimnames(model::Model, component::Symbol, name::Symbol)
-    meta = metainfo.getallcomps()
-    if name in keys(meta[(:Main, component)].parameters)
-        convert(Vector{Symbol}, meta[(:Main, component)].parameters[name].dimensions)
-    else
-        convert(Vector{Symbol}, meta[(:Main, component)].variables[name].dimensions)
-    end
-end
-
 "Return the total span occupied by each variable or parameter."
 function varlengths(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, vardictionary::Dict{Symbol, Symbol}=Dict{Symbol, Symbol}())
     Int64[prod(getdims(model, components[ii], get(vardictionary, names[ii], names[ii]))) for ii in 1:length(components)]
@@ -1147,7 +1144,7 @@ end
 
 "Construct a vector of values corresponding to entries in a matrix with the given dimensions, calling gen for each element."
 function vectorsingle(dims::Vector{Int64}, gen::Function)
-    f = Vector{Float64}(prod(dims))
+    f = Vector{Float64}(undef, prod(dims))
     for ii in 1:length(f)
         f[ii] = gen(toindex(ii, dims)...)
     end
@@ -1164,7 +1161,7 @@ function vectorsingle(dims::Vector{Int64}, gen::Function, dupover::Vector{Bool})
     dupouter = prod(dims[outers])
     dupinner = prod(dims[inners])
 
-    f = Vector{Float64}(prod(dims[.!dupover]))
+    f = Vector{Float64}(undef, prod(dims[.!dupover]))
     for ii in 1:length(f)
         f[ii] = gen(toindex(ii, dims[.!dupover])...)
     end
@@ -1172,29 +1169,20 @@ function vectorsingle(dims::Vector{Int64}, gen::Function, dupover::Vector{Bool})
     repeat(f, inner=[dupinner], outer=[dupouter])
 end
 
-doc"""
+## Example to be included below:
+# # Examples
+# ```jldoctest
+# using OptiMimi
+
+# dims = [3, 2]
+# A = OptiMimi.matrixdiagonal(dims, (ii, jj) -> 1)
+# sum(A)
+
+# # output
+# 6.0
+# ```
+"""
     matrixdiagonal(dims, gen)
-
-Creates a matrix of dimensions $\prod \text{dims}_i$.  Call the
-generate function, `gen` for all indices along the diagonal.  All
-combinations of indices will be called, since the "diagonal" part is
-between the rows and the columns.
-
-# Arguments
-* `dims::Vector{Int64}`: The multiple dimensions collapsed into both the rows and columns.
-* `gen::Function`: A function called with an argument for each dimension.
-
-# Examples
-```jldoctest
-using OptiMimi
-
-dims = [3, 2]
-A = OptiMimi.matrixdiagonal(dims, (ii, jj) -> 1)
-sum(A)
-
-# output
-6.0
-```
 """
 function matrixdiagonal(dims::Vector{Int64}, gen::Function)
     dimlen = prod(dims)
