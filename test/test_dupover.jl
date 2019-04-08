@@ -16,7 +16,7 @@ simple = add_comp!(m, Simple)
 xx = reshape(repeat([1, 2], inner=3), (3, 2))
 simple[:xx] = xx
 
-gen(rr) = m.md.external_params[:xx].values[rr, 1]
+gen(rr) = m.md.external_params[:xx].values[1, rr]
 hall = hallsingle(m, :Simple, :xx, gen, [:time])
 
-@test reshape(hall.f, (3, 2)) == m.md.external_params[:xx].values
+@test reshape(hall.f, (3, 2)) == m.md.external_params[:xx].values[:, :]
