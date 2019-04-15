@@ -1,7 +1,7 @@
 using MathProgBase
 using DataFrames
 using Clp
-using SparseArrays
+using SparseArrays, LinearAlgebra
 
 import Base.*, Base.-, Base.+, Base./, Base.max
 
@@ -1073,7 +1073,7 @@ function insertdim(iis::Vector{Int64}, dims::Vector{Int64}, insertat::Int64, dim
         (dimvalue - 1) * prod(dims) + iis
     else
         proddimsleft = prod(dims[1:insertat-1])
-        (div.(iis - 1, proddimsleft) * dimsize + dimvalue - 1) * proddimsleft + (iis - 1) .% proddimsleft + 1
+        (div.(iis .- 1, proddimsleft) * dimsize .+ dimvalue .- 1) * proddimsleft .+ (iis .- 1) .% proddimsleft .+ 1
     end
 end
 
@@ -1207,7 +1207,7 @@ end
 
 function matrixdiagonal(dims::Vector{Int64}, constant::Float64)
     dimlen = prod(dims)
-    speye(dimlen, dimlen) * constant
+    sparse(1.0I, dimlen, dimlen) * constant
 end
 
 function matrixdiagonal(dims::Vector{Int64}, gen::Function, dupover::Vector{Bool})

@@ -9,3 +9,4 @@ DataFrames
 Clp
 Distributions
 BlackBoxOptim
+LinearAlgebra
