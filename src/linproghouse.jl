@@ -1448,8 +1448,8 @@ function matrixintersect(rowdims::Vector{Int64}, coldims::Vector{Int64}, rowdimn
     alljjs2 = zeros(Int64, length(alljjs) * shareddupouter)
 
     for kk in 1:shareddupouter
-        alliis2[(kk - 1) * length(alliis) + (1:length(alliis))] = (kk - 1) * rownotshared + alliis
-        alljjs2[(kk - 1) * length(alljjs) + (1:length(alljjs))] = (kk - 1) * colnotshared + alljjs
+        alliis2[(kk - 1) * length(alliis) .+ (1:length(alliis))] = (kk - 1) * rownotshared .+ alliis
+        alljjs2[(kk - 1) * length(alljjs) .+ (1:length(alljjs))] = (kk - 1) * colnotshared .+ alljjs
     end
 
     sparse(alliis2, alljjs2, allvvs2, prod(rowdims), prod(coldims))
@@ -1505,8 +1505,8 @@ function matrixduplicate_extremes(A::SparseMatrixCSC{Float64, Int64}, rowdims::V
         ## order is vec([(slow, fast) for fast in 1:N, slow in 1:M])
         rowduped = vec([(rowoo - 1) * nrows * rowdupinner + (iis[kk] - 1) * rowdupinner + rowii for rowii in 1:rowdupinner, rowoo in 1:rowdupouter])
         colduped = vec([(coloo - 1) * ncols * coldupinner + (jjs[kk] - 1) * coldupinner + colii for colii in 1:coldupinner, coloo in 1:coldupouter])
-        alliis[(kk - 1) * kkdupnum + (1:kkdupnum)] = repeat(rowduped, outer=[coldupouter*coldupinner])
-        alljjs[(kk - 1) * kkdupnum + (1:kkdupnum)] = repeat(colduped, inner=[rowdupouter*rowdupinner])
+        alliis[(kk - 1) * kkdupnum .+ (1:kkdupnum)] = repeat(rowduped, outer=[coldupouter*coldupinner])
+        alljjs[(kk - 1) * kkdupnum .+ (1:kkdupnum)] = repeat(colduped, inner=[rowdupouter*rowdupinner])
     end
 
     sparse(alliis, alljjs, allvvs, prod(rowdims), prod(coldims))
