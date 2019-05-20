@@ -1344,8 +1344,8 @@ function matrixchunks(rowdims::Vector{Int64}, coldims::Vector{Int64}, gen::Funct
             @assert size(subA)[2] == rightii - leftii + 1 "Got matrix of size $(size(subA)) for columns $leftii - $rightii"
 
             iis, jjs, vvs = findnz(subA)
-            append!(alliis, iis + topii - 1)
-            append!(alljjs, jjs + leftii - 1)
+            append!(alliis, iis .+ (topii - 1))
+            append!(alljjs, jjs .+ (leftii - 1))
             append!(allvvs, vvs)
             #A[topii:bottomii, leftii:rightii] = gen(rowindex..., colindex...)
         end
