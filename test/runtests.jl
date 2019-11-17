@@ -1,7 +1,3 @@
-## Ensure master version of Mimi
-using Pkg
-Pkg.add(PackageSpec(name="Mimi", rev="master"))
-
 using Mimi
 using OptiMimi
 using Test
