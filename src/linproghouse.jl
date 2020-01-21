@@ -239,16 +239,18 @@ the same.  `gen` called for each combination of indices.
 * `parameter::Symbol`: The optimization parameter, corresponding to matrix columns.
 * `gen::Function`: The function generating gradient values.
 """
-function roomdiagonal(model::Model, component::Symbol, variable::Symbol, parameter::Symbol, gen::Function, dupover::Vector{Symbol}=Symbol[])
+function roomdiagonal(model::Model, component::Symbol, variable::Symbol, parameter::Symbol, gen::Function, dupover::Vector{Symbol}=Symbol[]; diagdupover::Vector{Symbol}=Symbol[])
     #println("$(now()) rd $component:$variable x $parameter")
     dimsvar = getdims(model, component, variable)
     dimspar = getdims(model, component, parameter)
 
-    if isempty(dupover)
+    @assert (isempty(dupover) || isempty(diagdupover)) "No current support for both dupover and diagdupover."
+
+    if isempty(dupover) && isempty(diagdupover)
         @assert dimsvar == dimspar "Variable and parameter in roomdiagonal do not have the same dimensions: $component.$variable $dimsvar <> $component.$parameter $dimspar"
 
         LinearProgrammingRoom(component, variable, component, parameter, matrixdiagonal(dimsvar, gen))
-    else
+    elseif !isempty(dupover)
         dupoverpar = Bool[dimname in dupover for dimname in getdimnames(model, component, parameter)]
         dupovervar = Bool[dimname in dupover for dimname in getdimnames(model, component, variable)]
 
@@ -258,19 +260,29 @@ function roomdiagonal(model::Model, component::Symbol, variable::Symbol, paramet
         matrix2 = matrixduplicate(matrix, dimsvar, dimspar, dupovervar, dupoverpar)
 
         LinearProgrammingRoom(component, variable, component, parameter, matrix2)
+    elseif !isempty(diagdupover)
+        @assert dimsvar == dimspar "Variable and parameter in roomdiagonal must be identifical when using diagdupover"
+        dupoverparvar = Bool[dimname in diagdupover for dimname in getdimnames(model, component, parameter)]
+
+        matrix = matrixdiagonal(dimsvar[.!dupoverparvar], gen)
+        matrix2 = matrixduplicate_diagonal(matrix, dimspar, dupoverparvar)
+
+        LinearProgrammingRoom(component, variable, component, parameter, matrix2)
     end
 end
 
-function roomdiagonal(model::Model, component::Symbol, variable::Symbol, parameter::Symbol, constant::Float64, dupover::Vector{Symbol}=Symbol[])
+function roomdiagonal(model::Model, component::Symbol, variable::Symbol, parameter::Symbol, constant::Float64, dupover::Vector{Symbol}=Symbol[]; diagdupover::Vector{Symbol}=Symbol[])
     #println("$(now()) rd $component:$variable x $parameter")
     dimsvar = getdims(model, component, variable)
     dimspar = getdims(model, component, parameter)
 
-    if isempty(dupover)
+    @assert (isempty(dupover) || isempty(diagdupover)) "No current support for both dupover and diagdupover."
+
+    if isempty(dupover) && isempty(diagdupover)
         @assert dimsvar == dimspar "Variable and parameter in roomdiagonal do not have the same dimensions: $component.$variable $dimsvar <> $component.$parameter $dimspar"
 
         LinearProgrammingRoom(component, variable, component, parameter, matrixdiagonal(dimsvar, constant))
-    else
+    elseif !isempty(dupover)
         dupoverpar = Bool[dimname in dupover for dimname in getdimnames(model, component, parameter)]
         dupovervar = Bool[dimname in dupover for dimname in getdimnames(model, component, variable)]
 
@@ -278,6 +290,14 @@ function roomdiagonal(model::Model, component::Symbol, variable::Symbol, paramet
 
         matrix = matrixdiagonal(dimsvar[.!dupovervar], constant)
         matrix2 = matrixduplicate(matrix, dimsvar, dimspar, dupovervar, dupoverpar)
+        LinearProgrammingRoom(component, variable, component, parameter, matrix2)
+    elseif !isempty(diagdupover)
+        @assert dimsvar == dimspar "Variable and parameter in roomdiagonal must be identifical when using diagdupover"
+        dupoverparvar = Bool[dimname in diagdupover for dimname in getdimnames(model, component, parameter)]
+
+        matrix = matrixdiagonal(dimsvar[.!dupoverparvar], constant)
+        matrix2 = matrixduplicate_diagonal(matrix, dimspar, dupoverparvar)
+
         LinearProgrammingRoom(component, variable, component, parameter, matrix2)
     end
 end
@@ -1554,4 +1574,27 @@ function matrixduplicate_general(origA::SparseMatrixCSC{Float64, Int64}, rowdims
     end
 
     sparse(alliis, alljjs, allvvs, prod(rowdims), prod(coldims))
+end
+
+"""
+General duplication of a known matrix in a block diagonal over additional dimensions.
+All off-diagonal entries are block 0s.
+"""
+function matrixduplicate_diagonal(origA::SparseMatrixCSC{Float64, Int64}, rowcoldims::Vector{Int64}, rowcoldupover::Vector{Bool})
+    iis, jjs, vvs = findnz(origA)
+
+    alliis = Int64[]
+    alljjs = Int64[]
+    allvvs = Float64[]
+
+    newrowcolsizes = rowcoldims[rowcoldupover]
+    for rowcolkk in 1:prod(rowcoldims[rowcoldupover])
+        fulliis = expanddims(iis, rowcoldims, rowcoldupover, toindex(rowcolkk, newrowcolsizes))
+        fulljjs = expanddims(jjs, rowcoldims, rowcoldupover, toindex(rowcolkk, newrowcolsizes))
+        append!(alliis, fulliis)
+        append!(alljjs, fulljjs)
+        append!(allvvs, vvs)
+    end
+
+    sparse(alliis, alljjs, allvvs, prod(rowcoldims), prod(rowcoldims))
 end
