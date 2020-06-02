@@ -990,6 +990,8 @@ end
 Return the array of solution values for a given parameter.
 """
 function getparametersolution(house::LinearProgrammingHouse, solution::Vector{Float64}, parameter::Symbol)
+    @assert parameter in house.parameters "Unknown parameter."
+
     varlens = varlengths(house.model, house.paramcomps, house.parameters, house.namedictionary)
 
     ii = findall(house.parameters .== parameter)[1]
