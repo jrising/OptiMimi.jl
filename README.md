@@ -17,10 +17,10 @@ they perform in Mimi's `run_timestep` function.  In addition, OptiMimi
 offers a way to automatically generate these matrices.
 
 OptiMimi supports autodifferentiation using ForwardDiff.  To use it,
-the Model must be created with the optional `autodiffable` set to
-`true`, and all components must be created using the `@defcompo`
-macro, instead of `@defcomp`.  If these are not used, OptiMimi will
-fall back on derivative-free algorithms.
+the `Model` object must be created with the optional argument
+`Number`, to specify a general-enough type to handle dual-numbers:
+that is, `m = Model(Number)` If this is used, when the optimization
+problem is created, OptiMimi use gradient algorithms.
 
 The General approach in OptiMimi can use algorithms in both NLopt and
 BlackBoxOptim.  The Linear programming approach uses any solver
