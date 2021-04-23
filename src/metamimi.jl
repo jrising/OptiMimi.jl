@@ -14,3 +14,15 @@ function getdimnames(model::Model, component::Symbol, name::Symbol)
         variable_dimensions(model, component, name)
     end
 end
+
+"""
+Avoid the distinction between set_param! and update_param!
+"""
+function set_or_update_param!(model::Model, component::Symbol, name::Symbol, value)
+    try
+        update_param!(model, name, value)
+    catch
+        set_param!(model, component, name, value)
+    end
+end
+
