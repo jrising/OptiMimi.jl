@@ -3,7 +3,6 @@ uuid = "61d5e40c-f051-5c04-90a0-b0f47eb95ad5"
 
 [deps]
 BlackBoxOptim = "a134a8b2-14d6-55f6-9291-3336d3ab0209"
-Clp = "e2554f3b-3117-50c0-817c-e040a3ddf72d"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 DiffResults = "163ba53b-c6d8-5494-b064-1a9d43ac40c5"
 DiffRules = "b552c78f-8df3-52c6-915a-8e097449b14b"

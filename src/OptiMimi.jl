@@ -24,6 +24,7 @@ mutable struct OptimizationProblem
     names::Vector{Symbol}
     opt::Opt
     constraints::Vector{Function}
+    paramtrans::Union{Vector{Function}, Nothing}
 end
 
 mutable struct BlackBoxOptimizationProblem{T}
@@ -34,6 +35,7 @@ mutable struct BlackBoxOptimizationProblem{T}
     objective::Function
     lowers::Vector{T}
     uppers::Vector{T}
+    paramtrans::Union{Vector{Function}, Nothing}
 end
 
 mutable struct LinprogOptimizationProblem{T}
@@ -64,24 +66,30 @@ end
 """
 Initialize a model with the results from an optimization.
 """
-function setparameters(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, xx::Vector)
-    startindex = 1
-    for (ii, len, isscalar) in Channel((chnl) -> nameindexes(model, components, names, chnl))
-        if isscalar
-            set_or_update_param!(model, components[ii], names[ii], xx[startindex])
-        else
-            shape = getdims(model, components[ii], names[ii])
-            reshaped = reshape(collect(model.md.number_type, xx[startindex:(startindex+len - 1)]), tuple(shape...))
-            set_or_update_param!(model, components[ii], names[ii], reshaped)
+function setparameters(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, xx::Vector, paramtrans::Union{Vector{Function}, Nothing})
+    if isnothing(paramtrans)
+        startindex = 1
+        for (ii, len, isscalar) in Channel((chnl) -> nameindexes(model, components, names, chnl))
+            if isscalar
+                set_or_update_param!(model, components[ii], names[ii], xx[startindex])
+            else
+                shape = getdims(model, components[ii], names[ii])
+                reshaped = reshape(collect(model.md.number_type, xx[startindex:(startindex+len - 1)]), tuple(shape...))
+                set_or_update_param!(model, components[ii], names[ii], reshaped)
+            end
+            startindex += len
         end
-        startindex += len
+    else
+        for (ii, len, isscalar) in Channel((chnl) -> nameindexes(model, components, names, chnl))
+            set_or_update_param!(model, components[ii], names[ii], paramtrans[ii](xx))
+        end
     end
 end
 
-function sensitivity(model::Model, component::Symbol, parameter::Symbol, objective::Function, points::Vector{Float64})
+function sensitivity(model::Model, component::Symbol, parameter::Symbol, objective::Function, points::Vector{Float64}, paramtrans::Union{Vector{Function}, Nothing}=nothing)
     results = []
     for point in points
-        setparameters(model, [component], [parameter], [point])
+        setparameters(model, [component], [parameter], [point], paramtrans)
         run(model)
         push!(results, objective(model))
     end
@@ -90,7 +98,7 @@ function sensitivity(model::Model, component::Symbol, parameter::Symbol, objecti
 end
 
 """Generate the form of objective function used by the optimization, taking parameters rather than a model."""
-function unaryobjective(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, objective::Function)
+function unaryobjective(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, objective::Function, paramtrans::Union{Vector{Function}, Nothing})
     function my_objective(xx::Vector)
         if allverbose
             println(xx)
@@ -99,7 +107,7 @@ function unaryobjective(model::Model, components::Vector{Symbol}, names::Vector{
         global objevals
         objevals += 1
 
-        setparameters(model, components, names, xx)
+        setparameters(model, components, names, xx, paramtrans)
         run(model)
         objective(model)
     end
@@ -108,8 +116,8 @@ function unaryobjective(model::Model, components::Vector{Symbol}, names::Vector{
 end
 
 """Create an NLopt-style objective function which does not use its grad argument."""
-function gradfreeobjective(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, objective::Function)
-    myunaryobjective = unaryobjective(model, components, names, objective)
+function gradfreeobjective(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, objective::Function, paramtrans::Union{Vector{Function}, Nothing})
+    myunaryobjective = unaryobjective(model, components, names, objective, paramtrans)
     function myobjective(xx::Vector, grad::Vector)
         myunaryobjective(xx)
     end
@@ -118,8 +126,8 @@ function gradfreeobjective(model::Model, components::Vector{Symbol}, names::Vect
 end
 
 """Create an NLopt-style objective function which computes an autodiff gradient."""
-function autodiffobjective(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, objective::Function)
-    myunaryobjective = unaryobjective(model, components, names, objective)
+function autodiffobjective(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, objective::Function, paramtrans::Union{Vector{Function}, Nothing})
+    myunaryobjective = unaryobjective(model, components, names, objective, paramtrans)
     function myobjective(xx::Vector, grad::Vector)
         out = DiffResults.GradientResult(xx)
         ForwardDiff.gradient!(out, myunaryobjective, xx)
@@ -160,8 +168,14 @@ function expandlimits(model::Model, components::Vector{Symbol}, names::Vector{Sy
 end
 
 """Setup an optimization problem."""
-function problem(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}, objective::Function; constraints::Vector{Function}=Function[], algorithm::Symbol=:LN_COBYLA_OR_LD_MMA) where T <: Real
-    my_lowers, my_uppers, totalvars = expandlimits(model, components, names, lowers, uppers)
+function problem(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}, objective::Function; constraints::Vector{Function}=Function[], algorithm::Symbol=:LN_COBYLA_OR_LD_MMA, paramtrans::Union{Vector{Function}, Nothing}=nothing) where T <: Real
+    if isnothing(paramtrans)
+        my_lowers, my_uppers, totalvars = expandlimits(model, components, names, lowers, uppers)
+    else
+        my_lowers = lowers
+        my_uppers = uppers
+        totalvars = length(lowers)
+    end
 
     if algorithm == :GUROBI_LINPROG
         # Make no changes to objective!
@@ -171,10 +185,10 @@ function problem(model::Model, components::Vector{Symbol}, names::Vector{Symbol}
         end
         if string(algorithm)[2] == 'N'
             warn("Model is autodifferentiable, but optimizing using a derivative-free algorithm.")
-            myobjective = gradfreeobjective(model, components, names, objective)
+            myobjective = gradfreeobjective(model, components, names, objective, paramtrans)
         else
             println("Using AutoDiff objective.")
-            myobjective = autodiffobjective(model, components, names, objective)
+            myobjective = autodiffobjective(model, components, names, objective, paramtrans)
         end
     else
         if algorithm == :LN_COBYLA_OR_LD_MMA
@@ -184,7 +198,7 @@ function problem(model::Model, components::Vector{Symbol}, names::Vector{Symbol}
             algorithm = :LN_COBYLA
         end
 
-        myobjective = gradfreeobjective(model, components, names, objective)
+        myobjective = gradfreeobjective(model, components, names, objective, paramtrans)
     end
 
     if algorithm == :GUROBI_LINPROG
@@ -195,7 +209,7 @@ function problem(model::Model, components::Vector{Symbol}, names::Vector{Symbol}
                 warn("Functional constraints not supported for BBO algorithms.")
             end
 
-            BlackBoxOptimizationProblem(algorithm, model, components, names, myobjective, my_lowers, my_uppers)
+            BlackBoxOptimizationProblem(algorithm, model, components, names, myobjective, my_lowers, my_uppers, paramtrans)
         else
             opt = Opt(algorithm, totalvars)
             lower_bounds!(opt, my_lowers)
@@ -207,7 +221,7 @@ function problem(model::Model, components::Vector{Symbol}, names::Vector{Symbol}
             for constraint in constraints
                 let this_constraint = constraint
                     function my_constraint(xx::Vector, grad::Vector)
-                        setparameters(model, components, names, xx)
+                        setparameters(model, components, names, xx, paramtrans)
                         run(model)
                         this_constraint(model)
                     end
@@ -216,7 +230,7 @@ function problem(model::Model, components::Vector{Symbol}, names::Vector{Symbol}
                 end
             end
 
-            OptimizationProblem(model, components, names, opt, constraints)
+            OptimizationProblem(model, components, names, opt, constraints, paramtrans)
         end
     end
 end
@@ -236,7 +250,7 @@ function solution(optprob::OptimizationProblem, generator::Function; maxiter=Inf
     while attempts < maxiter
         initial = generator()
 
-        setparameters(optprob.model, optprob.components, optprob.names, initial)
+        setparameters(optprob.model, optprob.components, optprob.names, initial, optprob.paramtrans)
         run(optprob.model)
 
         valid = true
@@ -269,6 +283,7 @@ function solution(optprob::OptimizationProblem, generator::Function; maxiter=Inf
     end
     (minf,minx,ret) = optimize(optprob.opt, initial)
 
+    print(ret)
     (minf, minx)
 end
 
@@ -304,7 +319,7 @@ function solution(optprob::LinprogOptimizationProblem, verbose=false)
     end
 
     if optprob.model.md.number_type == Number
-        myobjective = unaryobjective(optprob.model, optprob.components, optprob.names, optprob.objective)
+        myobjective = unaryobjective(optprob.model, optprob.components, optprob.names, optprob.objective, nothing)
         f, b, A = lpconstraints(optprob.model, optprob.components, optprob.names, myobjective, objectiveconstraints)
     else
         f, b, A = lpconstraints(optprob.model, optprob.components, optprob.names, optprob.objective, optprob.objectiveconstraints)
