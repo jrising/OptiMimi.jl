@@ -4,12 +4,14 @@
 
 ## Two algorithms available:
 ## biological: https://github.com/robertfeldt/BlackBoxOptim.jl
-## sampled: Deterministic optimization under different Monte Carlo
+## sampled: Deterministic optimization under different Monte Carlos
+## montecarlo: Optimization of Monte Carlo mean of objective
 ## draws.
 
 ##### Biological Genetics #####
 
-using BlackBoxOptim
+import BlackBoxOptim
+using Random
 
 ##########
 
@@ -17,7 +19,7 @@ mutable struct UncertainOptimizationProblem
     model::Model
     components::Vector{Symbol}
     names::Vector{Symbol}
-    montecarlo::Function
+    montecarlo::Union{Function, SimulationDef}
     objective::Function
     lowers::Vector{Float64}
     uppers::Vector{Float64}
@@ -35,64 +37,91 @@ end
 """Setup an optimization over Monte Carlo uncertainty."""
 function uncertainproblem(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{Float64}, uppers::Vector{Float64}, objective::Function, montecarlo::Function=(model) -> nothing)
     my_lowers, my_uppers, totalvars = expandlimits(model, components, names, lowers, uppers)
-    my_objective = unaryobjective(model, components, names, objective)
+    UncertainOptimizationProblem(model, components, names, montecarlo, objective, my_lowers, my_uppers)
+end
 
-    UncertainOptimizationProblem(model, components, names, montecarlo, my_objective, my_lowers, my_uppers)
+function uncertainproblem(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{Float64}, uppers::Vector{Float64}, objective::Function, sim::SimulationDef, mcnum=Int64)
+    function objectivetopayload(sim_inst::SimulationInstance, trialnum::Int, ntimesteps::Int, tup::Nothing)
+        model = sim_inst.models[1]
+        results = Mimi.payload(sim_inst)
+        results[trialnum] = objective(model)
+    end
+
+    function uncertainobjective(model::Model)
+        Mimi.set_payload!(sim, zeros(mcnum))
+        Random.seed!(0)
+        mcout = run(sim, model, mcnum, post_trial_func=objectivetopayload)
+        values = Mimi.payload(mcout)
+        mean(values[isfinite.(values)])
+    end
+
+    problem(model, components, names, lowers, uppers, uncertainobjective)
 end
 
 """Solve an optimization over Monte Carlo uncertainty."""
 function solution(optprob::UncertainOptimizationProblem, generator::Function, algorithm::Symbol, mcperlife::Int64, samples::Int64)
-    function sample_objective(parameters::Vector{Float64})
-        total = 0
-        for iter in 1:mcperlife
-            optprob.montecarlo(optprob.model)
-            total += optprob.objective(parameters)
+    if algorithm ∈ [:biological, :sampled]
+        my_objective = unaryobjective(model, components, names, objective)
+
+        function sample_objective(parameters::Vector{Float64})
+            total = 0
+            for iter in 1:mcperlife
+                optprob.montecarlo(optprob.model)
+                total += optprob.objective(parameters)
+            end
+
+            total / mcperlife
         end
 
-        total / mcperlife
-    end
+        if algorithm == :biological
+            res = BlackBoxOptim.bboptimize(p -> -sample_objective(p); SearchRange=collect(zip(optprob.lowers, optprob.uppers)), MaxFuncEvals=samples, Method=:separable_nes)
 
-    if algorithm == :biological
-        res = bboptimize(p -> -sample_objective(p); SearchRange=collect(zip(optprob.lowers, optprob.uppers)), MaxFuncEvals=samples, Method=:separable_nes)
+            fmean = NaN
+            fserr = NaN
+            xmean = best_candidate(res)
+            xserr = repmat([NaN], length(optprob.lowers))
+            extra = res
+        elseif algorithm == :sampled
+            opt = Opt(:LN_COBYLA, length(optprob.lowers))
+            lower_bounds!(opt, optprob.lowers)
+            upper_bounds!(opt, optprob.uppers)
+            xtol_rel!(opt, minimum(1e-6 * (optprob.uppers - optprob.lowers)))
 
-        fmean = NaN
-        fserr = NaN
-        xmean = best_candidate(res)
-        xserr = repmat([NaN], length(optprob.lowers))
-        extra = res
-    elseif algorithm == :sampled
-        opt = Opt(:LN_COBYLA, length(optprob.lowers))
-        lower_bounds!(opt, optprob.lowers)
-        upper_bounds!(opt, optprob.uppers)
-        xtol_rel!(opt, minimum(1e-6 * (optprob.uppers - optprob.lowers)))
+            sampleseed = 0
+            function hold_objective(parameters::Vector{Float64}, grad::Vector{Float64})
+                srand(sampleseed)
+                sample_objective(parameters)
+            end
 
-        sampleseed = 0
-        function hold_objective(parameters::Vector{Float64}, grad::Vector{Float64})
-            srand(sampleseed)
-            sample_objective(parameters)
+            max_objective!(opt, hold_objective)
+
+            sampleprob = OptimizationProblem(optprob.model, optprob.components, optprob.names, optprob.objective, opt, Function[])
+
+            allparams = Vector{Float64}[]
+
+            for sample in 1:samples
+                sampleseed = sample
+                
+                minf, minx = solution(sampleprob, generator, maxiter=10000)
+                push!(allparams, Float64[minf; minx])
+            end
+
+            allparams = transpose(hcat(allparams...))
+
+            fmean = mean(allparams[:, 1])
+            fserr = std(allparams[:, 1]) / sqrt(samples)
+            
+            xmean = vec(mean(allparams[:, 2:end], 1))
+            xserr = vec(std(allparams[:, 2:end], 1) / sqrt(samples))
+
+            extra = nothing
         end
-
-        max_objective!(opt, hold_objective)
-
-        sampleprob = OptimizationProblem(optprob.model, optprob.components, optprob.names, opt, Function[])
-
-        allparams = Vector{Float64}[]
-
-        for sample in 1:samples
-            sampleseed = sample
-
-            minf, minx = solution(sampleprob, generator, maxiter=10000)
-            push!(allparams, Float64[minf; minx])
-        end
-
-        allparams = transpose(hcat(allparams...))
-
-        fmean = mean(allparams[:, 1])
-        fserr = std(allparams[:, 1]) / sqrt(samples)
-
-        xmean = vec(mean(allparams[:, 2:end], 1))
-        xserr = vec(std(allparams[:, 2:end], 1) / sqrt(samples))
-
+    elseif algorithm == :montecarlo
+        minf, minx = solution(subprob, generator, samples)
+        fmean = minf
+        fserr = 0
+        xmean = minx
+        xserr = 0
         extra = nothing
     else
         error("Unknown algorithm")

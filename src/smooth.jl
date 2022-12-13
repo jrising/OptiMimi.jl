@@ -1,12 +1,12 @@
 using Interpolations
-using Dierckx
+import Dierckx
 using Distributions
 
 using NLopt
-import OptiMimi.OptimizationProblem, OptiMimi.getdims, OptiMimi.gradfreeobjective
+# import OptiMimi.OptimizationProblem, OptiMimi.getdims, OptiMimi.gradfreeobjective
 # using Plots
 
-function piecewisesolution_single(optprob::OptimizationProblem, objective::Function, initgen::Function, maxiter=Inf, verbose=false; reltol=1e-6)
+function piecewisesolution_single(optprob::OptimizationProblem, initgen::Function, maxiter=Inf, verbose=false; reltol=1e-6)
     len = getdims(optprob.model, optprob.components[1], optprob.names[1])[1]
     numsegs = Int64.([2 .^(0:(floor(log2(len-1))-1)); len-1])
 
@@ -20,7 +20,7 @@ function piecewisesolution_single(optprob::OptimizationProblem, objective::Funct
         if numseg > 2
             # Drop xx where [LinearInterp - CubicInterp] < reltol
             linears = LinearInterpolation(last_xx, last_soln)(xx)
-            cubics = evaluate(Spline1D(last_xx, last_soln, k=min(3, length(last_xx) - 1)), xx)
+            cubics = Dierckx.evaluate(Dierckx.Spline1D(last_xx, last_soln, k=min(3, length(last_xx) - 1)), xx)
             keeps = abs.(linears .- cubics) ./ ((linears .+ cubics) / 2) .> reltol
             keeps[1] = true
             keeps[length(keeps)] = true
@@ -46,7 +46,7 @@ function piecewisesolution_single(optprob::OptimizationProblem, objective::Funct
         upper_bounds!(opt, optprob.opt.upper_bounds[xx[keeps]])
         xtol_rel!(opt, reltol)
 
-        myobjective = gradfreeobjective(optprob.model, optprob.components, optprob.names, objective, paramtrans)
+        myobjective = gradfreeobjective(optprob.model, optprob.components, optprob.names, optprob.objective, paramtrans)
 
         max_objective!(opt, myobjective)
 
@@ -63,14 +63,17 @@ function piecewisesolution_single(optprob::OptimizationProblem, objective::Funct
         end
 
         if sum(keeps) == len - 1
-            subprob = OptimizationProblem(optprob.model, optprob.components, optprob.names, opt, optprob.constraints,
-                                          nothing)
+            subprob = OptimizationProblem(optprob.model, optprob.components, optprob.names, optprob.objective, opt, optprob.constraints, nothing)
         else
-            subprob = OptimizationProblem(optprob.model, optprob.components, optprob.names, opt, optprob.constraints,
-                                          paramtrans)
+            subprob = OptimizationProblem(optprob.model, optprob.components, optprob.names, optprob.objective, opt, optprob.constraints, paramtrans)
         end
 
-        soln = solution(subprob, initgen(sum(keeps), xx[keeps], last_xx, last_soln))
+        if isnothing(last_xx)
+            lin_yy = nothing
+        else
+            lin_yy = LinearInterpolation(last_xx, last_soln)(xx[keeps])
+        end
+        soln = solution(subprob, initgen(sum(keeps), lin_yy))
 
         if numseg > 2
             last_soln = LinearInterpolation(last_xx, last_soln)(xx)
