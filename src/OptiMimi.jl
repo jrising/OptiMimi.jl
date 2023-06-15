@@ -4,7 +4,7 @@ using NLopt
 using ForwardDiff, DiffResults
 using MathProgBase
 
-import Mimi: Model
+import Mimi: Model, AbstractModel
 
 export problem, solution, unaryobjective, objevals, setparameters, nameindexes, sensitivity, uncertainproblem, setsolution
 
@@ -19,7 +19,7 @@ allverbose = false
 objevals = 0
 
 mutable struct OptimizationProblem
-    model::Model
+    model::AbstractModel
     components::Vector{Symbol}
     names::Vector{Symbol}
     opt::Opt
@@ -29,7 +29,7 @@ end
 
 mutable struct BlackBoxOptimizationProblem{T}
     algorithm::Symbol
-    model::Model
+    model::AbstractModel
     components::Vector{Symbol}
     names::Vector{Symbol}
     objective::Function
@@ -39,7 +39,7 @@ mutable struct BlackBoxOptimizationProblem{T}
 end
 
 mutable struct LinprogOptimizationProblem{T}
-    model::Model
+    model::AbstractModel
     components::Vector{Symbol}
     names::Vector{Symbol}
     objective::Function
@@ -52,7 +52,7 @@ end
 BlackBoxAlgorithms = [:separable_nes, :xnes, :dxnes]
 
 """Returns (ii, len, isscalar) with the index of each symbol and its length."""
-function nameindexes(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, chnl)
+function nameindexes(model::AbstractModel, components::Vector{Symbol}, names::Vector{Symbol}, chnl)
     for ii in 1:length(components)
         dims = getdims(model, components[ii], names[ii])
         if length(dims) == 0
@@ -66,7 +66,7 @@ end
 """
 Initialize a model with the results from an optimization.
 """
-function setparameters(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, xx::Vector, paramtrans::Union{Vector{Function}, Nothing})
+function setparameters(model::AbstractModel, components::Vector{Symbol}, names::Vector{Symbol}, xx::Vector, paramtrans::Union{Vector{Function}, Nothing})
     if isnothing(paramtrans)
         startindex = 1
         for (ii, len, isscalar) in Channel((chnl) -> nameindexes(model, components, names, chnl))
@@ -86,7 +86,7 @@ function setparameters(model::Model, components::Vector{Symbol}, names::Vector{S
     end
 end
 
-function sensitivity(model::Model, component::Symbol, parameter::Symbol, objective::Function, points::Vector{Float64}, paramtrans::Union{Vector{Function}, Nothing}=nothing)
+function sensitivity(model::AbstractModel, component::Symbol, parameter::Symbol, objective::Function, points::Vector{Float64}, paramtrans::Union{Vector{Function}, Nothing}=nothing)
     results = []
     for point in points
         setparameters(model, [component], [parameter], [point], paramtrans)
@@ -98,7 +98,7 @@ function sensitivity(model::Model, component::Symbol, parameter::Symbol, objecti
 end
 
 """Generate the form of objective function used by the optimization, taking parameters rather than a model."""
-function unaryobjective(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, objective::Function, paramtrans::Union{Vector{Function}, Nothing})
+function unaryobjective(model::AbstractModel, components::Vector{Symbol}, names::Vector{Symbol}, objective::Function, paramtrans::Union{Vector{Function}, Nothing})
     function my_objective(xx::Vector)
         if allverbose
             println(xx)
@@ -116,7 +116,7 @@ function unaryobjective(model::Model, components::Vector{Symbol}, names::Vector{
 end
 
 """Create an NLopt-style objective function which does not use its grad argument."""
-function gradfreeobjective(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, objective::Function, paramtrans::Union{Vector{Function}, Nothing})
+function gradfreeobjective(model::AbstractModel, components::Vector{Symbol}, names::Vector{Symbol}, objective::Function, paramtrans::Union{Vector{Function}, Nothing})
     myunaryobjective = unaryobjective(model, components, names, objective, paramtrans)
     function myobjective(xx::Vector, grad::Vector)
         myunaryobjective(xx)
@@ -126,7 +126,7 @@ function gradfreeobjective(model::Model, components::Vector{Symbol}, names::Vect
 end
 
 """Create an NLopt-style objective function which computes an autodiff gradient."""
-function autodiffobjective(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, objective::Function, paramtrans::Union{Vector{Function}, Nothing})
+function autodiffobjective(model::AbstractModel, components::Vector{Symbol}, names::Vector{Symbol}, objective::Function, paramtrans::Union{Vector{Function}, Nothing})
     myunaryobjective = unaryobjective(model, components, names, objective, paramtrans)
     function myobjective(xx::Vector, grad::Vector)
         out = DiffResults.GradientResult(xx)
@@ -142,7 +142,7 @@ function autodiffobjective(model::Model, components::Vector{Symbol}, names::Vect
 end
 
 """Create a 0 point."""
-function make0(model::Model, components::Vector{Symbol}, names::Vector{Symbol})
+function make0(model::AbstractModel, components::Vector{Symbol}, names::Vector{Symbol})
     initial = Float64[]
     for (ii, len, isscalar) in Channel((chnl) -> nameindexes(model, components, names, chnl))
         append!(initial, [0. for jj in 1:len])
@@ -152,7 +152,7 @@ function make0(model::Model, components::Vector{Symbol}, names::Vector{Symbol})
 end
 
 """Expand parameter constraints to full vectors for every numerical parameter."""
-function expandlimits(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}) where T <: Real
+function expandlimits(model::AbstractModel, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}) where T <: Real
     my_lowers = T[]
     my_uppers = T[]
 
@@ -168,7 +168,7 @@ function expandlimits(model::Model, components::Vector{Symbol}, names::Vector{Sy
 end
 
 """Setup an optimization problem."""
-function problem(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}, objective::Function; constraints::Vector{Function}=Function[], algorithm::Symbol=:LN_COBYLA_OR_LD_MMA, paramtrans::Union{Vector{Function}, Nothing}=nothing) where T <: Real
+function problem(model::AbstractModel, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}, objective::Function; constraints::Vector{Function}=Function[], algorithm::Symbol=:LN_COBYLA_OR_LD_MMA, paramtrans::Union{Vector{Function}, Nothing}=nothing) where T <: Real
     if isnothing(paramtrans)
         my_lowers, my_uppers, totalvars = expandlimits(model, components, names, lowers, uppers)
     else
@@ -179,7 +179,7 @@ function problem(model::Model, components::Vector{Symbol}, names::Vector{Symbol}
 
     if algorithm == :GUROBI_LINPROG
         # Make no changes to objective!
-    elseif model.md.number_type == Number
+    elseif hasfield(typeof(model), :md) && model.md.number_type == Number
         if algorithm == :LN_COBYLA_OR_LD_MMA
             algorithm = :LD_MMA
         end
@@ -302,7 +302,7 @@ end
 
 
 """Setup an optimization problem."""
-function problem(model::Model, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}, objective::Function, objectiveconstraints::Vector{Function}, matrixconstraints::Vector{MatrixConstraintSet}) where T <: Real
+function problem(model::AbstractModel, components::Vector{Symbol}, names::Vector{Symbol}, lowers::Vector{T}, uppers::Vector{T}, objective::Function, objectiveconstraints::Vector{Function}, matrixconstraints::Vector{MatrixConstraintSet}) where T <: Real
     my_lowers, my_uppers, totalvars = expandlimits(model, components, names, lowers, uppers)
     LinprogOptimizationProblem(model, components, names, objective, objectiveconstraints, matrixconstraints, my_lowers, my_uppers)
 end
@@ -318,7 +318,7 @@ function solution(optprob::LinprogOptimizationProblem, verbose=false)
         println("Optimizing...")
     end
 
-    if optprob.model.md.number_type == Number
+    if hasfield(typeof(optprob.model), :md) && optprob.model.md.number_type == Number
         myobjective = unaryobjective(optprob.model, optprob.components, optprob.names, optprob.objective, nothing)
         f, b, A = lpconstraints(optprob.model, optprob.components, optprob.names, myobjective, objectiveconstraints)
     else
@@ -332,6 +332,10 @@ function solution(optprob::LinprogOptimizationProblem, verbose=false)
     @time sol = linprog(-f, A, '<', b, optprob.exlowers, optprob.exuppers)
 
     sol.sol
+end
+
+function include_smooth()
+    include(joinpath(dirname(@__FILE__), "smooth.jl"))
 end
 
 end # module
