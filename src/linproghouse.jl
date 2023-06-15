@@ -1,6 +1,5 @@
 using MathProgBase
 using DataFrames
-using Clp
 using SparseArrays, LinearAlgebra
 
 import Base.*, Base.-, Base.+, Base./, Base.max
