@@ -22,6 +22,7 @@ mutable struct OptimizationProblem
     model::AbstractModel
     components::Vector{Symbol}
     names::Vector{Symbol}
+    objective::Function
     opt::Opt
     constraints::Vector{Function}
     paramtrans::Union{Vector{Function}, Nothing}
@@ -48,6 +49,8 @@ mutable struct LinprogOptimizationProblem{T}
     exlowers::Vector{T}
     exuppers::Vector{T}
 end
+
+include("smooth.jl")
 
 BlackBoxAlgorithms = [:separable_nes, :xnes, :dxnes]
 
@@ -230,7 +233,7 @@ function problem(model::AbstractModel, components::Vector{Symbol}, names::Vector
                 end
             end
 
-            OptimizationProblem(model, components, names, opt, constraints, paramtrans)
+            OptimizationProblem(model, components, names, objective, opt, constraints, paramtrans)
         end
     end
 end
